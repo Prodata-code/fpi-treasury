@@ -1,10 +1,17 @@
 /**
  * FGV Palm Industries Sdn. Bhd.
- * Treasury Month-End Balance Dashboard - Hybrid Client Application
- * Compatible with both GitHub Pages (Direct Turso HTTP API) and Netlify (Serverless Functions)
+ * Treasury Management Unified Portal (Month-End Balance + Daily Cashflow)
+ * Powered by Turso SQLite (Direct HTTP Pipeline & Netlify Serverless)
  */
 
-// Master 71 Projects Dataset
+// ================= MASTER CONFIGURATION & DATASETS =================
+
+const TURSO_CONFIG = {
+  url: "https://fpi-treasury-makankari.aws-ap-northeast-1.turso.io/v2/pipeline",
+  token: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI2NTE4NzksImlkIjoiMDFhMTYyNjAtOTQwMS03MDhhLTkyYzEtYTkzODgyMmFmNDcyIiwia2lkIjoiX2lkMTNxcl9STjUwTWRzMUJkVkNvLVM1OWRQWm9zSmtSX1l6YVpUNmFiRSIsInJpZCI6ImYwZGQ3MGIzLTYxOGUtNDE1Ni1iNzk1LTBmZmUyNTU1MTgxYiJ9.d8_7HQyDqaibmVDJEoRwEZL33e9YetfRD4u5bIVSO5ZBUveCP7tyDWp6WX_1sJDnA0kfMOQjR1Sggz3PHZXVCw"
+};
+
+// 71 FGV Palm Industries Projects
 const DEFAULT_PROJECTS = [
   { bil: 1, projek: "Zon 1 - Pej. Zon Temerloh", hse: "M9009", acc: "556141013772", gl: "18900902", ba: "4109", balance: 12757.45 },
   { bil: 2, projek: "KS Bukit Sagu", hse: "M9079", acc: "556093248416", gl: "18907902", ba: "4046", balance: 8302.03 },
@@ -79,17 +86,22 @@ const DEFAULT_PROJECTS = [
   { bil: 71, projek: "Bengkel Ulu Jempol", hse: "M9049", acc: "556141013789", gl: "18904902", ba: "4151", balance: 285114.53 }
 ];
 
-// Turso Database Credentials for Direct GitHub Pages Pipeline
-const TURSO_CONFIG = {
-  url: "https://fpi-treasury-makankari.aws-ap-northeast-1.turso.io/v2/pipeline",
-  token: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI2NTE4NzksImlkIjoiMDFhMTYyNjAtOTQwMS03MDhhLTkyYzEtYTkzODgyMmFmNDcyIiwia2lkIjoiX2lkMTNxcl9STjUwTWRzMUJkVkNvLVM1OWRQWm9zSmtSX1l6YVpUNmFiRSIsInJpZCI6ImYwZGQ3MGIzLTYxOGUtNDE1Ni1iNzk1LTBmZmUyNTU1MTgxYiJ9.d8_7HQyDqaibmVDJEoRwEZL33e9YetfRD4u5bIVSO5ZBUveCP7tyDWp6WX_1sJDnA0kfMOQjR1Sggz3PHZXVCw"
-};
+// Daily Cashflow Categories
+const lessItems2859 = ["Transfer to 564212106476","SSC (VENDOR)","FGVC","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","Prodata","MPOB","CJN SABAH","ETIQA/Insurans","CA & ADV Bonus","KWSP CA & ADV BON","LHDN CA & ADV BON","Bayaran SD","Bayaran SD PBH","Pembayaran Praktikal","CAPEX","Yayasan","SST","Petronas","Cess Sabah","WIP","Cukai Tanah","PM Care","Interco FGV Transport","Tax 5th YA2026","FPX","HR-Loan Rumah"];
+const lessItems6476 = ["Transfer to 564098512859","SSC (VENDOR)","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","FPX"];
+const addItems2859 = ["Receive from 564212106476", "Receive from FGVC (IFP fund)", "PUMP BACK"];
+const addItems6476 = ["Receive from 564098512859", "Receive from FGVC (IFP fund)", "PUMP BACK"];
+const outgoingDefaultCategories = ["GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LHDN BONUS","KWSP BONUS","KWSP BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","KWSP CA & ADV BON","LHDN CA & ADV BON","Yayasan","PETRONAS","Tax Sarawak","Cess Sabah","MPOB","HR"];
 
+// State Variables
+let currentPortalModule = 'month-end';
+let currentDailyTab = 1;
 let projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
 let hasUnsavedChanges = false;
-let isDirectTursoMode = false;
+let isRestoringDaily = false;
 
-// Format Currency
+// ================= UTILITIES =================
+
 function fmt(val) {
   const num = Number(val) || 0;
   return num.toLocaleString('en-MY', {
@@ -98,21 +110,21 @@ function fmt(val) {
   });
 }
 
-// Auto Reversal formula
+function parseVal(v) {
+  return parseFloat(String(v).replace(/,/g, '')) || 0;
+}
+
 function calcReversal(b) {
   if (b <= 10000) return 0;
   return Math.ceil((b - 10000) / 1000) * 1000;
 }
 
-// Toast Notification
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toast-message');
   toastMsg.textContent = message;
   toast.className = `toast ${type} show`;
-  setTimeout(() => {
-    toast.className = 'toast';
-  }, 4000);
+  setTimeout(() => { toast.className = 'toast'; }, 4000);
 }
 
 // ================= AUTHENTICATION =================
@@ -129,37 +141,32 @@ async function handleLogin(e) {
   unlockBtn.disabled = true;
   unlockBtn.textContent = 'Verifying...';
 
-  // Check if running on GitHub Pages or local static file
   const isStaticMode = window.location.hostname.includes('github.io') || window.location.protocol === 'file:';
 
   if (isStaticMode) {
-    // Client-side verification for GitHub Pages
     if (password === '#Treasury26') {
       sessionStorage.setItem('fpi_treasury_token', 'gh-pages-session');
-      unlockDashboard();
+      unlockPortal();
     } else {
       passwordInput.classList.add('error');
       lockError.textContent = "Incorrect password. Please try again.";
       lockError.style.display = 'block';
       unlockBtn.disabled = false;
-      unlockBtn.textContent = 'Unlock Dashboard';
+      unlockBtn.textContent = 'Unlock Portal';
     }
     return;
   }
 
-  // Otherwise, use Netlify /api/auth endpoint
   try {
     const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password })
     });
-
     const data = await res.json();
-
     if (res.ok && data.success) {
       sessionStorage.setItem('fpi_treasury_token', data.token);
-      unlockDashboard();
+      unlockPortal();
     } else {
       passwordInput.classList.add('error');
       lockError.textContent = data.error || 'Incorrect password.';
@@ -168,7 +175,7 @@ async function handleLogin(e) {
   } catch (err) {
     if (password === '#Treasury26') {
       sessionStorage.setItem('fpi_treasury_token', 'offline-session');
-      unlockDashboard();
+      unlockPortal();
     } else {
       passwordInput.classList.add('error');
       lockError.textContent = 'Connection error. Please try again.';
@@ -176,14 +183,24 @@ async function handleLogin(e) {
     }
   } finally {
     unlockBtn.disabled = false;
-    unlockBtn.textContent = 'Unlock Dashboard';
+    unlockBtn.textContent = 'Unlock Portal';
   }
 }
 
-function unlockDashboard() {
+function unlockPortal() {
   document.getElementById('lock-screen').style.display = 'none';
   document.getElementById('dashboard-app').style.display = 'block';
+  
+  // Set default dates
+  const todayStr = new Date().toISOString().split('T')[0];
+  const dailyDateInput = document.getElementById('daily-report-date');
+  if (dailyDateInput && !dailyDateInput.value) {
+    dailyDateInput.value = todayStr;
+  }
+  
+  buildDailyTables();
   fetchBalances();
+  fetchDailyCashflowFromTurso();
 }
 
 function handleLogout() {
@@ -196,11 +213,28 @@ function handleLogout() {
 function checkExistingAuth() {
   const token = sessionStorage.getItem('fpi_treasury_token');
   if (token) {
-    unlockDashboard();
+    unlockPortal();
   }
 }
 
-// ================= DATA FETCHING (HYBRID ENGINE) =================
+// ================= PORTAL MODULE NAVIGATION =================
+
+function switchPortalModule(mod) {
+  currentPortalModule = mod;
+  const isMonthEnd = mod === 'month-end';
+
+  document.getElementById('module-month-end').style.display = isMonthEnd ? 'block' : 'none';
+  document.getElementById('module-daily-cashflow').style.display = isMonthEnd ? 'none' : 'block';
+
+  document.getElementById('nav-btn-monthend').className = `portal-nav-tab ${isMonthEnd ? 'active' : ''}`;
+  document.getElementById('nav-btn-daily').className = `portal-nav-tab ${!isMonthEnd ? 'active' : ''}`;
+
+  document.getElementById('portal-header-title').textContent = isMonthEnd 
+    ? 'Project Month-End Balance Dashboard' 
+    : 'Daily Cash Status & Treasury Operations';
+}
+
+// ================= MODULE 1: MONTH-END BALANCE LOGIC =================
 
 async function fetchBalances() {
   const period = document.getElementById('period-picker').value || '2026-06-30';
@@ -210,39 +244,32 @@ async function fetchBalances() {
   const tursoDot = document.getElementById('turso-dot');
   const tursoText = document.getElementById('turso-text');
 
-  // Try 1: Netlify Serverless Function
+  // Try 1: Netlify serverless
   try {
     const token = sessionStorage.getItem('fpi_treasury_token');
     const res = await fetch(`/api/balances?period=${period}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-
     if (res.ok) {
       const result = await res.json();
       if (result.success && Array.isArray(result.data)) {
         projectsData = result.data;
         tursoDot.className = 'status-dot';
-        tursoText.textContent = result.isTursoConnected ? 'Netlify (Turso Connected)' : 'Netlify (Local)';
-        tursoBadge.title = 'Serving via Netlify Serverless Functions';
-        isDirectTursoMode = false;
+        tursoText.textContent = 'Netlify (Turso Live)';
         renderTable();
         return;
       }
     }
-  } catch (e) {
-    // Netlify API not found, proceeding to GitHub Pages Direct Turso Mode
-  }
+  } catch (_) {}
 
-  // Try 2: Direct Turso HTTP Pipeline (GitHub Pages Mode)
+  // Try 2: Direct Turso pipeline (GitHub Pages Mode)
   try {
-    isDirectTursoMode = true;
     const query = `
       SELECT p.bil, p.projek, p.hse, p.acc, p.gl, p.ba, COALESCE(b.balance, p.default_balance) AS balance
       FROM projects p
       LEFT JOIN balances b ON p.ba = b.ba AND b.period = ?
       ORDER BY p.bil ASC;
     `;
-
     const res = await fetch(TURSO_CONFIG.url, {
       method: 'POST',
       headers: {
@@ -251,18 +278,11 @@ async function fetchBalances() {
       },
       body: JSON.stringify({
         requests: [
-          {
-            type: 'execute',
-            stmt: {
-              sql: query,
-              args: [{ type: 'text', value: period }]
-            }
-          },
+          { type: 'execute', stmt: { sql: query, args: [{ type: 'text', value: period }] } },
           { type: 'close' }
         ]
       })
     });
-
     if (res.ok) {
       const json = await res.json();
       const rows = json.results?.[0]?.response?.result?.rows;
@@ -278,34 +298,20 @@ async function fetchBalances() {
         }));
         tursoDot.className = 'status-dot test';
         tursoText.textContent = 'GitHub Pages (Turso Live)';
-        tursoBadge.title = 'Direct cloud sync active with Turso database from GitHub Pages';
         renderTable();
         return;
       }
     }
   } catch (err) {
-    console.warn('Direct Turso connection notice:', err);
+    console.warn(err);
   }
 
-  // Fallback 3: LocalStorage + Default 71 projects
-  const cached = localStorage.getItem(`fpi_balances_${period}`);
-  if (cached) {
-    try {
-      projectsData = JSON.parse(cached);
-    } catch (_) {
-      projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
-    }
-  } else {
-    projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
-  }
-
+  // Fallback
+  projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
   tursoDot.className = 'status-dot offline';
   tursoText.textContent = 'Local Cache Mode';
-  tursoBadge.title = 'Saved in browser memory';
   renderTable();
 }
-
-// ================= SAVE TO TURSO (HYBRID ENGINE) =================
 
 async function saveToTurso() {
   const period = document.getElementById('period-picker').value || '2026-06-30';
@@ -318,33 +324,6 @@ async function saveToTurso() {
     balance: Number(p.balance) || 0
   }));
 
-  // Cache locally
-  localStorage.setItem(`fpi_balances_${period}`, JSON.stringify(projectsData));
-
-  // Try 1: Netlify Serverless API
-  if (!isDirectTursoMode) {
-    try {
-      const token = sessionStorage.getItem('fpi_treasury_token');
-      const res = await fetch('/api/balances', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ period, items })
-      });
-
-      const result = await res.json();
-      if (res.ok && result.success) {
-        onSaveSuccess(saveBtn, 'Netlify');
-        return;
-      }
-    } catch (e) {
-      // Fallback to direct Turso pipeline
-    }
-  }
-
-  // Try 2: Direct Turso HTTP Pipeline (Works directly on GitHub Pages!)
   try {
     const requests = items.map(item => ({
       type: 'execute',
@@ -373,35 +352,22 @@ async function saveToTurso() {
     });
 
     if (res.ok) {
-      onSaveSuccess(saveBtn, 'Turso Cloud');
+      hasUnsavedChanges = false;
+      saveBtn.textContent = 'Saved to Turso!';
+      saveBtn.style.backgroundColor = '#059669';
+      showToast('All 71 project balances successfully saved to Turso cloud database!');
+      setTimeout(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save to Turso';
+      }, 2500);
       return;
     }
   } catch (err) {
-    console.error('Error saving to Turso:', err);
+    showToast('Failed to save to Turso: ' + err.message, 'error');
   }
 
-  // Fallback saved locally
   saveBtn.disabled = false;
   saveBtn.textContent = '💾 Save to Turso';
-  showToast('Saved locally in browser memory.', 'success');
-}
-
-function onSaveSuccess(saveBtn, target) {
-  hasUnsavedChanges = false;
-  saveBtn.textContent = 'Saved to Turso!';
-  saveBtn.style.backgroundColor = '#059669';
-  showToast(`All 71 project balances successfully saved to ${target}!`);
-  setTimeout(() => {
-    saveBtn.disabled = false;
-    saveBtn.textContent = '💾 Save to Turso';
-  }, 2500);
-}
-
-function markUnsaved() {
-  hasUnsavedChanges = true;
-  const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save to Turso (Unsaved)';
-  saveBtn.style.backgroundColor = '#e11d48';
 }
 
 function updatePeriodDisplay(dateStr) {
@@ -417,24 +383,14 @@ function changePeriod() {
   fetchBalances();
 }
 
-// ================= TABLE RENDERING & LOGIC =================
-
 function renderTable() {
   const tbody = document.getElementById('table-body');
   const search = (document.getElementById('search-input').value || '').trim().toLowerCase();
 
-  // Sort by Business Area (BA) ascending
-  const sorted = [...projectsData].sort((a, b) => {
-    const baA = parseInt(a.ba) || Infinity;
-    const baB = parseInt(b.ba) || Infinity;
-    return baA - baB;
-  });
+  const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba) || Infinity) - (parseInt(b.ba) || Infinity));
 
   tbody.innerHTML = '';
-  let totalBal = 0;
-  let totalRev = 0;
-  let totalFin = 0;
-  let warnCount = 0;
+  let totalBal = 0, totalRev = 0, totalFin = 0, warnCount = 0;
 
   sorted.forEach((row, idx) => {
     if (search) {
@@ -480,7 +436,6 @@ function renderTable() {
       <td class="text-right reversal-val">${fmt(reversal)}</td>
       <td class="text-right final-val">${fmt(finalBal)}</td>
     `;
-
     tbody.appendChild(tr);
   });
 
@@ -498,57 +453,36 @@ function onBalanceChange(input) {
   const ba = input.dataset.ba;
   const rawVal = input.value.replace(/,/g, '').trim();
   const numVal = parseFloat(rawVal) || 0;
-
   const target = projectsData.find(p => p.ba === ba);
   if (target) {
     target.balance = numVal;
-    markUnsaved();
     renderTable();
+    const saveBtn = document.getElementById('save-btn');
+    saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+    saveBtn.style.backgroundColor = '#e11d48';
   }
 }
 
-function filterTable() {
-  renderTable();
-}
-
-// ================= MODALS & ACTIONS =================
-
-function openPasteModal() {
-  document.getElementById('paste-modal').classList.remove('hidden');
-  document.getElementById('paste-area').focus();
-}
-
-function closePasteModal() {
-  document.getElementById('paste-modal').classList.add('hidden');
-  document.getElementById('paste-area').value = '';
-}
-
-function openResetModal() {
-  document.getElementById('reset-modal').classList.remove('hidden');
-}
-
-function closeResetModal() {
-  document.getElementById('reset-modal').classList.add('hidden');
-}
+function filterTable() { renderTable(); }
+function openPasteModal() { document.getElementById('paste-modal').classList.remove('hidden'); document.getElementById('paste-area').focus(); }
+function closePasteModal() { document.getElementById('paste-modal').classList.add('hidden'); document.getElementById('paste-area').value = ''; }
+function openResetModal() { document.getElementById('reset-modal').classList.remove('hidden'); }
+function closeResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
 
 function applyReset() {
-  projectsData.forEach(p => {
-    p.balance = 0;
-  });
-  markUnsaved();
+  projectsData.forEach(p => { p.balance = 0; });
   closeResetModal();
   renderTable();
-  showToast('All project balances set to 0. Click "Save to Turso" to commit.');
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+  saveBtn.style.backgroundColor = '#e11d48';
+  showToast('All project balances cleared to 0.');
 }
 
 function applyPaste() {
   const raw = document.getElementById('paste-area').value;
   const lines = raw.split(/[\n\r]+/).map(s => s.trim()).filter(Boolean);
-
-  if (lines.length === 0) {
-    closePasteModal();
-    return;
-  }
+  if (lines.length === 0) { closePasteModal(); return; }
 
   let parsedWithKeys = false;
   const parsedMap = new Map();
@@ -569,36 +503,685 @@ function applyPaste() {
   });
 
   if (parsedWithKeys) {
-    let matchedCount = 0;
+    let count = 0;
     projectsData.forEach(p => {
       if (parsedMap.has(p.ba)) {
         p.balance = parsedMap.get(p.ba);
-        matchedCount++;
+        count++;
       }
     });
-    showToast(`Matched and updated ${matchedCount} projects by BA code.`);
+    showToast(`Updated ${count} projects by BA code.`);
   } else {
     const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba) || 0) - (parseInt(b.ba) || 0));
-    let appliedCount = 0;
+    let count = 0;
     lines.forEach((line, i) => {
       const val = parseFloat(line.replace(/[^0-9.\-]/g, ''));
       if (!isNaN(val) && i < sorted.length) {
         sorted[i].balance = val;
-        appliedCount++;
+        count++;
       }
     });
-    showToast(`Updated ${appliedCount} project balances sequentially.`);
+    showToast(`Updated ${count} balances sequentially.`);
   }
 
-  markUnsaved();
   closePasteModal();
   renderTable();
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+  saveBtn.style.backgroundColor = '#e11d48';
 }
 
-function triggerPrint() {
+function triggerPrint() { window.print(); }
+
+// ================= MODULE 2: DAILY CASHFLOW LOGIC =================
+
+function switchDailyTab(tabIdx) {
+  currentDailyTab = tabIdx;
+  document.getElementById('daily-page-1').style.display = tabIdx === 1 ? 'block' : 'none';
+  document.getElementById('daily-page-2').style.display = tabIdx === 2 ? 'block' : 'none';
+  document.getElementById('daily-page-3').style.display = tabIdx === 3 ? 'block' : 'none';
+
+  [1, 2, 3].forEach(i => {
+    const btn = document.getElementById(`daily-tab-btn-${i}`);
+    if (btn) btn.className = `daily-sub-tab ${tabIdx === i ? 'active' : ''}`;
+  });
+}
+
+function buildDailyTables() {
+  buildAccountTables('2859', lessItems2859, addItems2859);
+  buildAccountTables('6476', lessItems6476, addItems6476);
+  buildOutgoingTable();
+
+  // Seed default investments if empty
+  const defaultInvest = [
+    { inst: "KAF", date: "2024-02-11", maturity: "", rate: "3.02", from: "Sukuk+tolling", bal: "", amt: "0" },
+    { inst: "MBB", date: "", maturity: "", rate: "", from: "", bal: "", amt: "0" },
+    { inst: "MBSB (Long-Term)", date: "", maturity: "", rate: "3.60", from: "Tolling", bal: "15,000,000.00", amt: "15,000,000.00" }
+  ];
+  ['2859', '6476'].forEach(prefix => {
+    const body = document.getElementById(`invest-body-${prefix}`);
+    if (body && body.children.length === 0) {
+      defaultInvest.forEach(r => createInvestRow(prefix, r));
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.closest('#module-daily-cashflow')) {
+      recalcDaily();
+    }
+  });
+}
+
+function buildAccountTables(prefix, lessList, addList) {
+  const s1 = document.getElementById(`cash-body-${prefix}-s1`);
+  const s2 = document.getElementById(`cash-body-${prefix}-s2`);
+  const s3 = document.getElementById(`cash-body-${prefix}-s3`);
+
+  if (!s1 || s1.children.length > 0) return;
+
+  // S1: Bank Position
+  s1.innerHTML = `
+    <tr>
+      <td>Bank Statement Balance</td>
+      <td class="text-right"><input type="number" class="row-input ${prefix}-top-input" value="0" step="0.01"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td colspan="2">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-weight:600;font-size:12px;">Maturity from Investment:</span>
+          <select class="less-dropdown" id="${prefix}-maturity-select">
+            <option value="MBB">MBB</option>
+            <option value="MBSB">MBSB</option>
+            <option value="KAF">KAF</option>
+          </select>
+          <button class="add-btn btn-primary" onclick="addMaturityFromDropdown('${prefix}')">Add</button>
+          <button class="add-btn btn-outline" onclick="addCustomMaturityItem('${prefix}')">+ Custom</button>
+        </div>
+      </td>
+      <td></td>
+    </tr>
+    <tr id="${prefix}-maturity-marker" style="display:none;"></tr>
+    <tr>
+      <td colspan="2">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-weight:600;font-size:12px;">Add:</span>
+          <select class="less-dropdown" id="${prefix}-add-select">
+            ${addList.map(item => `<option value="${item}">${item}</option>`).join('')}
+          </select>
+          <button class="add-btn btn-primary" onclick="addAddFromDropdown('${prefix}')">Add</button>
+          <button class="add-btn btn-outline" onclick="addCustomAddItem('${prefix}')">+ Custom</button>
+        </div>
+      </td>
+      <td></td>
+    </tr>
+    <tr id="${prefix}-add-marker" style="display:none;"></tr>
+    <tr class="section-total">
+      <td>Available Balance</td>
+      <td class="text-right" id="${prefix}-avail-balance">0.00</td>
+      <td></td>
+    </tr>
+  `;
+
+  // S2: Deductions
+  s2.innerHTML = `
+    <tr>
+      <td colspan="2">
+        <select class="less-dropdown" id="${prefix}-less-select">
+          ${lessList.map(item => `<option value="${item}">${item}</option>`).join('')}
+        </select>
+        <button class="add-btn btn-primary" onclick="addLessFromDropdown('${prefix}')">Add</button>
+        <button class="add-btn btn-outline" onclick="addCustomLessItem('${prefix}')">+ Custom</button>
+      </td>
+      <td></td>
+    </tr>
+    <tr class="section-total" id="${prefix}-total-deductions-row">
+      <td>Total Deductions</td>
+      <td class="text-right" id="${prefix}-total-deductions">0.00</td>
+      <td></td>
+    </tr>
+  `;
+
+  // S3: Final Position
+  s3.innerHTML = `
+    <tr class="section-total">
+      <td>Balance Available for Placement</td>
+      <td class="text-right" id="${prefix}-bal-placement">0.00</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td style="padding:6px 10px;"><span>Placement</span></td>
+      <td class="text-right" style="padding:6px 10px;">
+        <input type="number" class="row-input ${prefix}-place-input" value="0" step="0.01" style="width:100%;">
+      </td>
+      <td class="text-center">
+        <button class="text-red-500 font-bold" onclick="removePlacementRow(this)">✕</button>
+      </td>
+    </tr>
+    <tr id="${prefix}-add-placement-row">
+      <td colspan="3">
+        <button class="add-btn btn-primary" onclick="addPlacementRow('${prefix}')">+ Add Placement</button>
+      </td>
+    </tr>
+    <tr class="section-total">
+      <td>NET BALANCE</td>
+      <td class="text-right" id="${prefix}-net-balance">0.00</td>
+      <td></td>
+    </tr>
+  `;
+}
+
+function buildOutgoingTable() {
+  const body = document.getElementById('outgoing-body');
+  if (!body || body.children.length > 0) return;
+  body.innerHTML = '';
+  outgoingDefaultCategories.forEach(label => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${label}</td>
+      <td class="text-right"><input type="number" class="row-input out-input" value="0" step="0.01"></td>
+      <td class="text-right"><input type="date" class="row-input"></td>
+    `;
+    body.appendChild(tr);
+  });
+  const totalTr = document.createElement('tr');
+  totalTr.className = 'section-total';
+  totalTr.innerHTML = `<td>Total Outgoing</td><td class="text-right" id="out-total">0.00</td><td></td>`;
+  body.appendChild(totalTr);
+}
+
+function addMaturityFromDropdown(prefix) {
+  const sel = document.getElementById(`${prefix}-maturity-select`);
+  insertMaturityRow(prefix, sel.value, false);
+}
+function addCustomMaturityItem(prefix) { insertMaturityRow(prefix, '', true); }
+
+function insertMaturityRow(prefix, label, isCustom) {
+  const marker = document.getElementById(`${prefix}-maturity-marker`);
+  const tr = document.createElement('tr');
+  const nameCell = isCustom 
+    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
+    : `<td style="padding-left:24px">${label}</td>`;
+  tr.innerHTML = `
+    ${nameCell}
+    <td class="text-right"><input type="number" class="row-input ${prefix}-maturity-input" value="0" step="0.01"></td>
+    <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
+  `;
+  marker.parentNode.insertBefore(tr, marker);
+  recalcDaily();
+}
+
+function addAddFromDropdown(prefix) {
+  const sel = document.getElementById(`${prefix}-add-select`);
+  insertAddRow(prefix, sel.value, false);
+}
+function addCustomAddItem(prefix) { insertAddRow(prefix, '', true); }
+
+function insertAddRow(prefix, label, isCustom) {
+  const marker = document.getElementById(`${prefix}-add-marker`);
+  const tr = document.createElement('tr');
+  const nameCell = isCustom 
+    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
+    : `<td style="padding-left:24px">${label}</td>`;
+  
+  const isTransferSync = (prefix === '2859' && label === 'Receive from 564212106476') || (prefix === '6476' && label === 'Receive from 564098512859');
+  const inputCell = isTransferSync 
+    ? `<td class="text-right"><input type="text" class="row-input ${prefix}-add-input" value="0" readonly style="background:#f3f4f6;cursor:not-allowed;" data-sync="transfer"></td>`
+    : `<td class="text-right"><input type="number" class="row-input ${prefix}-add-input" value="0" step="0.01"></td>`;
+
+  tr.innerHTML = `
+    ${nameCell}
+    ${inputCell}
+    <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
+  `;
+  marker.parentNode.insertBefore(tr, marker);
+  recalcDaily();
+}
+
+function addLessFromDropdown(prefix) {
+  const sel = document.getElementById(`${prefix}-less-select`);
+  insertLessRow(prefix, sel.value, false);
+}
+function addCustomLessItem(prefix) { insertLessRow(prefix, '', true); }
+
+function insertLessRow(prefix, label, isCustom) {
+  const totalRow = document.getElementById(`${prefix}-total-deductions-row`);
+  const tr = document.createElement('tr');
+  const nameCell = isCustom 
+    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
+    : `<td style="padding-left:24px">${label}</td>`;
+  tr.innerHTML = `
+    ${nameCell}
+    <td class="text-right"><input type="number" class="row-input ${prefix}-less-input" value="0" step="0.01"></td>
+    <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
+  `;
+  totalRow.parentNode.insertBefore(tr, totalRow);
+  recalcDaily();
+}
+
+function addPlacementRow(prefix) {
+  const addBtnRow = document.getElementById(`${prefix}-add-placement-row`);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="padding:6px 10px;"><span>Placement</span></td>
+    <td class="text-right" style="padding:6px 10px;"><input type="number" class="row-input ${prefix}-place-input" value="0" step="0.01" style="width:100%;"></td>
+    <td class="text-center"><button class="text-red-500 font-bold" onclick="removePlacementRow(this)">✕</button></td>
+  `;
+  addBtnRow.parentNode.insertBefore(tr, addBtnRow);
+  recalcDaily();
+}
+
+function removePlacementRow(btn) {
+  btn.closest('tr').remove();
+  recalcDaily();
+}
+
+function addInvestRow(prefix) {
+  createInvestRow(prefix, { inst: '', date: '', maturity: '', rate: '', from: '', bal: '', amt: '0' });
+}
+
+function createInvestRow(prefix, r) {
+  const body = document.getElementById(`invest-body-${prefix}`);
+  if (!body) return;
+  const idx = body.children.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="row-input" style="width:90px;" value="${r.inst || ''}" data-idx="${idx}" data-field="inst"></td>
+    <td><input type="date" class="row-input" style="width:125px;" value="${r.date || ''}" data-idx="${idx}" data-field="date"></td>
+    <td><input type="date" class="row-input" style="width:125px;" value="${r.maturity || ''}" data-idx="${idx}" data-field="maturity"></td>
+    <td class="text-center font-mono" data-idx="${idx}" data-field="day">-</td>
+    <td><input class="row-input text-right" style="width:65px;" value="${r.rate || ''}" data-idx="${idx}" data-field="rate"></td>
+    <td class="text-right font-mono" data-idx="${idx}" data-field="profit">0.00</td>
+    <td><input class="row-input" style="width:110px;" value="${r.from || ''}" data-idx="${idx}" data-field="from"></td>
+    <td><input class="row-input text-right" style="width:115px;" value="${r.bal || ''}" data-idx="${idx}" data-field="bal"></td>
+    <td><input class="row-input text-right" style="width:115px;" value="${r.amt || '0'}" data-idx="${idx}" data-field="amt"></td>
+    <td class="text-right font-bold text-emerald" data-idx="${idx}" data-field="total">0.00</td>
+  `;
+  body.appendChild(tr);
+  calcSingleInvest(prefix, idx);
+}
+
+function calcSingleInvest(prefix, idx) {
+  const g = (f) => document.querySelector(`#invest-body-${prefix} [data-idx="${idx}"][data-field="${f}"]`);
+  const d1Str = g('date')?.value || '';
+  const d2Str = g('maturity')?.value || '';
+  const rate = parseFloat(g('rate')?.value || 0);
+  const amt = parseVal(g('amt')?.value || '0');
+
+  let day = 0, profit = 0;
+  if (d1Str && d2Str) {
+    const d1 = new Date(d1Str);
+    const d2 = new Date(d2Str);
+    if (!isNaN(d1) && !isNaN(d2)) {
+      day = Math.floor((d2 - d1) / 864e5);
+    }
+  }
+  if (amt > 0 && rate > 0 && day > 0) {
+    profit = amt * (rate / 100) * (day / 365);
+  }
+
+  const dayEl = g('day'); if (dayEl) dayEl.textContent = day > 0 ? day : '-';
+  const profEl = g('profit'); if (profEl) profEl.textContent = fmt(profit);
+  const totEl = g('total'); if (totEl) totEl.textContent = fmt(profit + amt);
+}
+
+function addOutgoingItem() {
+  const body = document.getElementById('outgoing-body');
+  const totalRow = body.querySelector('.section-total');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="row-input" style="width:220px;" placeholder="Custom Outgoing Name"></td>
+    <td class="text-right"><input type="number" class="row-input out-input" value="0" step="0.01"></td>
+    <td class="text-right"><input type="date" class="row-input"></td>
+  `;
+  body.insertBefore(tr, totalRow);
+  recalcDaily();
+}
+
+function getRowLabel(row) {
+  const td = row.querySelector('td:first-child');
+  if (!td) return '';
+  const inp = td.querySelector('input');
+  return inp ? inp.value.trim() : td.textContent.trim();
+}
+
+function recalcDaily() {
+  if (isRestoringDaily) return;
+  ['2859', '6476'].forEach(prefix => {
+    // Recalc investments
+    const invBody = document.getElementById(`invest-body-${prefix}`);
+    if (invBody) {
+      for (let i = 0; i < invBody.children.length; i++) {
+        calcSingleInvest(prefix, i);
+      }
+    }
+    recalcAccountSection(prefix);
+  });
+
+  // Outgoing total
+  const outInputs = [...document.querySelectorAll('.out-input')].map(i => parseVal(i.value));
+  const outTot = outInputs.reduce((a, b) => a + b, 0);
+  const outTotEl = document.getElementById('out-total');
+  if (outTotEl) outTotEl.textContent = fmt(outTot);
+
+  checkUpcomingPayments();
+}
+
+function recalcAccountSection(prefix) {
+  const topInp = document.querySelector(`.${prefix}-top-input`);
+  const topBal = parseVal(topInp?.value || 0);
+
+  const matInps = [...document.querySelectorAll(`.${prefix}-maturity-input`)].map(i => parseVal(i.value));
+  const matTot = matInps.reduce((a, b) => a + b, 0);
+
+  const addInps = [...document.querySelectorAll(`.${prefix}-add-input`)].map(i => parseVal(i.value));
+  const addTot = addInps.reduce((a, b) => a + b, 0);
+
+  const avail = topBal + matTot + addTot;
+  const availEl = document.getElementById(`${prefix}-avail-balance`);
+  if (availEl) availEl.textContent = fmt(avail);
+
+  const lessInps = [...document.querySelectorAll(`.${prefix}-less-input`)].map(i => parseVal(i.value));
+  const deductTot = lessInps.reduce((a, b) => a + b, 0);
+  const deductEl = document.getElementById(`${prefix}-total-deductions`);
+  if (deductEl) deductEl.textContent = fmt(deductTot);
+
+  const balPlace = avail - deductTot;
+  const balPlaceEl = document.getElementById(`${prefix}-bal-placement`);
+  if (balPlaceEl) balPlaceEl.textContent = fmt(balPlace);
+
+  const placeInps = [...document.querySelectorAll(`.${prefix}-place-input`)].map(i => parseVal(i.value));
+  const placeTot = placeInps.reduce((a, b) => a + b, 0);
+
+  const netBal = balPlace - placeTot;
+  const netEl = document.getElementById(`${prefix}-net-balance`);
+  if (netEl) netEl.textContent = fmt(netBal);
+}
+
+function checkUpcomingPayments() {
+  const banner = document.getElementById('reminder-banner');
+  const list = document.getElementById('reminder-list');
+  const dateStr = document.getElementById('daily-report-date')?.value;
+  if (!banner || !list || !dateStr) return;
+
+  const today = new Date(dateStr);
+  if (isNaN(today)) return;
+  today.setHours(0, 0, 0, 0);
+
+  const due = [];
+  document.querySelectorAll('#outgoing-body tr:not(.section-total)').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length >= 3) {
+      const label = getRowLabel(tr);
+      const amt = parseVal(cells[1].querySelector('input')?.value || 0);
+      const pDateStr = cells[2].querySelector('input')?.value;
+      if (pDateStr && amt > 0) {
+        const pDate = new Date(pDateStr);
+        pDate.setHours(0, 0, 0, 0);
+        // Remind 1 to 3 days in advance (handling weekend)
+        const diffDays = Math.round((pDate - today) / 864e5);
+        if (diffDays >= 0 && diffDays <= 3) {
+          due.push({ label, amt, pDateStr });
+        }
+      }
+    }
+  });
+
+  if (due.length > 0) {
+    list.innerHTML = '';
+    due.forEach(d => {
+      const li = document.createElement('li');
+      li.className = 'reminder-item';
+      li.innerHTML = `
+        <span><strong>${d.label}</strong>: RM ${fmt(d.amt)} (Due: ${d.pDateStr})</span>
+        <button class="add-btn btn-primary" onclick="reserveOutgoing('${d.label}', ${d.amt})">Reserve Now</button>
+      `;
+      list.appendChild(li);
+    });
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function reserveOutgoing(label, amt) {
+  insertLessRow('2859', label, false);
+  const lessInputs = document.querySelectorAll('.2859-less-input');
+  if (lessInputs.length > 0) {
+    lessInputs[lessInputs.length - 1].value = amt;
+  }
+  recalcDaily();
+  showToast(`Reserved ${label} (RM ${fmt(amt)}) in MBB 2859 deductions.`);
+}
+
+// ================= DAILY CASHFLOW TURSO SYNC =================
+
+function serializeDailyState() {
+  const report_date = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
+  const serializeAcc = (prefix) => {
+    const topBal = parseVal(document.querySelector(`.${prefix}-top-input`)?.value || 0);
+    const maturity = [...document.querySelectorAll(`.${prefix}-maturity-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const add = [...document.querySelectorAll(`.${prefix}-add-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const less = [...document.querySelectorAll(`.${prefix}-less-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const place = [...document.querySelectorAll(`.${prefix}-place-input`)].map(i => parseVal(i.value));
+    const invest = [];
+    document.querySelectorAll(`#invest-body-${prefix} tr`).forEach(tr => {
+      const inps = tr.querySelectorAll('input');
+      if (inps.length >= 7) {
+        invest.push({ inst: inps[0].value, date: inps[1].value, maturity: inps[2].value, rate: inps[3].value, from: inps[4].value, bal: inps[5].value, amt: inps[6].value });
+      }
+    });
+    return { topBal, maturity, add, less, place, invest };
+  };
+
+  const outgoing = [];
+  document.querySelectorAll('#outgoing-body tr:not(.section-total)').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length >= 3) {
+      outgoing.push({
+        label: getRowLabel(tr),
+        amt: parseVal(cells[1].querySelector('input')?.value || 0),
+        date: cells[2].querySelector('input')?.value || ''
+      });
+    }
+  });
+
+  return {
+    report_date,
+    acc2859: serializeAcc('2859'),
+    acc6476: serializeAcc('6476'),
+    outgoing
+  };
+}
+
+async function saveDailyCashflowToTurso() {
+  const saveBtn = document.getElementById('daily-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving Daily Cashflow...';
+
+  const state = serializeDailyState();
+  const dateStr = state.report_date;
+  const jsonStr = JSON.stringify(state);
+
+  // Cache locally
+  localStorage.setItem(`fpi_daily_${dateStr}`, jsonStr);
+
+  try {
+    const res = await fetch(TURSO_CONFIG.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: `INSERT INTO daily_cashflow (report_date, data_json, updated_at)
+                    VALUES (?, ?, datetime('now'))
+                    ON CONFLICT(report_date) DO UPDATE SET
+                      data_json = excluded.data_json,
+                      updated_at = excluded.updated_at;`,
+              args: [
+                { type: 'text', value: dateStr },
+                { type: 'text', value: jsonStr }
+              ]
+            }
+          },
+          { type: 'close' }
+        ]
+      })
+    });
+
+    if (res.ok) {
+      saveBtn.textContent = 'Saved to Turso!';
+      saveBtn.style.backgroundColor = '#059669';
+      showToast(`Daily Cashflow for ${dateStr} saved to Turso database!`);
+      setTimeout(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Daily Cashflow to Turso';
+      }, 2500);
+      return;
+    }
+  } catch (err) {
+    showToast('Failed to save to Turso: ' + err.message, 'error');
+  }
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = '💾 Save Daily Cashflow to Turso';
+}
+
+async function fetchDailyCashflowFromTurso() {
+  const dateInput = document.getElementById('daily-report-date');
+  const dateStr = dateInput?.value || new Date().toISOString().split('T')[0];
+
+  try {
+    const res = await fetch(TURSO_CONFIG.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: `SELECT data_json FROM daily_cashflow WHERE report_date = ?;`,
+              args: [{ type: 'text', value: dateStr }]
+            }
+          },
+          { type: 'close' }
+        ]
+      })
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const val = json.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value;
+      if (val) {
+        restoreDailyState(JSON.parse(val));
+        return;
+      }
+    }
+  } catch (_) {}
+
+  // Local cache fallback
+  const cached = localStorage.getItem(`fpi_daily_${dateStr}`);
+  if (cached) {
+    restoreDailyState(JSON.parse(cached));
+  }
+}
+
+function restoreDailyState(state) {
+  if (!state) return;
+  isRestoringDaily = true;
+  try {
+    const restoreAcc = (prefix, accData) => {
+      if (!accData) return;
+      const topInp = document.querySelector(`.${prefix}-top-input`);
+      if (topInp) topInp.value = accData.topBal || 0;
+
+      // Clear dynamic rows
+      document.querySelectorAll(`.${prefix}-maturity-input`).forEach(i => i.closest('tr').remove());
+      document.querySelectorAll(`.${prefix}-add-input`).forEach(i => i.closest('tr').remove());
+      document.querySelectorAll(`.${prefix}-less-input`).forEach(i => i.closest('tr').remove());
+
+      (accData.maturity || []).forEach(m => {
+        insertMaturityRow(prefix, m.label, false);
+        const inps = document.querySelectorAll(`.${prefix}-maturity-input`);
+        inps[inps.length - 1].value = m.val;
+      });
+
+      (accData.add || []).forEach(a => {
+        insertAddRow(prefix, a.label, false);
+        const inps = document.querySelectorAll(`.${prefix}-add-input`);
+        inps[inps.length - 1].value = a.val;
+      });
+
+      (accData.less || []).forEach(l => {
+        insertLessRow(prefix, l.label, false);
+        const inps = document.querySelectorAll(`.${prefix}-less-input`);
+        inps[inps.length - 1].value = l.val;
+      });
+
+      const placeInps = document.querySelectorAll(`.${prefix}-place-input`);
+      (accData.place || [0]).forEach((val, idx) => {
+        if (idx === 0 && placeInps[0]) {
+          placeInps[0].value = val;
+        } else if (idx > 0) {
+          addPlacementRow(prefix);
+          const currentPlaces = document.querySelectorAll(`.${prefix}-place-input`);
+          currentPlaces[currentPlaces.length - 1].value = val;
+        }
+      });
+
+      const invBody = document.getElementById(`invest-body-${prefix}`);
+      if (invBody && Array.isArray(accData.invest) && accData.invest.length > 0) {
+        invBody.innerHTML = '';
+        accData.invest.forEach(r => createInvestRow(prefix, r));
+      }
+    };
+
+    restoreAcc('2859', state.acc2859);
+    restoreAcc('6476', state.acc6476);
+
+    if (Array.isArray(state.outgoing)) {
+      const outBody = document.getElementById('outgoing-body');
+      if (outBody) {
+        outBody.innerHTML = '';
+        state.outgoing.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${row.label}</td>
+            <td class="text-right"><input type="number" class="row-input out-input" value="${row.amt}" step="0.01"></td>
+            <td class="text-right"><input type="date" class="row-input" value="${row.date}"></td>
+          `;
+          outBody.appendChild(tr);
+        });
+        const totalTr = document.createElement('tr');
+        totalTr.className = 'section-total';
+        totalTr.innerHTML = `<td>Total Outgoing</td><td class="text-right" id="out-total">0.00</td><td></td>`;
+        outBody.appendChild(totalTr);
+      }
+    }
+
+  } finally {
+    isRestoringDaily = false;
+    recalcDaily();
+  }
+}
+
+function onDailyDateChange() {
+  fetchDailyCashflowFromTurso();
+}
+
+function exportDailyPDF() {
   window.print();
 }
 
+// Initial check on page load
 window.addEventListener('DOMContentLoaded', () => {
   checkExistingAuth();
 });

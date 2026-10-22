@@ -34,6 +34,11 @@ async function ensureTables(client) {
       updated_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (period, ba),
       FOREIGN KEY (ba) REFERENCES projects (ba)
+    );`,
+    `CREATE TABLE IF NOT EXISTS daily_cashflow (
+      report_date TEXT PRIMARY KEY,
+      data_json TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
     );`
   ]);
 

@@ -1,6 +1,6 @@
 /* ==========================================================================
-   FGV Palm Industries Sdn. Bhd. - Treasury Dashboard Styling
-   Modern, Clean, Responsive & Print-Optimized
+   FGV Palm Industries Sdn. Bhd. - Treasury Unified Portal Styling
+   Month-End Balance Dashboard + Daily Cashflow System
    ========================================================================== */
 
 :root {
@@ -8,11 +8,15 @@
   --primary-hover: #2a4f7a;
   --primary-dark: #142842;
   --emerald: #059669;
+  --emerald-hover: #047857;
   --emerald-light: #ecfdf5;
   --rose: #e11d48;
   --rose-hover: #be123c;
   --warning-bg: #fef2f2;
   --warning-text: #dc2626;
+  --amber-bg: #fffbeb;
+  --amber-border: #fcd34d;
+  --amber-text: #92400e;
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
@@ -81,30 +85,6 @@ body {
   flex-wrap: wrap;
 }
 
-.period-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: #cbd5e1;
-}
-
-.period-input {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #ffffff;
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.825rem;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.period-input:focus {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: #ffffff;
-}
-
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -132,6 +112,50 @@ body {
   background-color: #f59e0b;
 }
 
+/* ================= Main Portal Navigation Tabs ================= */
+.portal-nav {
+  background: #ffffff;
+  border-bottom: 2px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 70px;
+  z-index: 35;
+}
+
+.portal-nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  padding: 0 1.5rem;
+  gap: 0.5rem;
+}
+
+.portal-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.portal-nav-tab:hover {
+  color: var(--primary);
+  background-color: var(--gray-50);
+}
+
+.portal-nav-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background-color: transparent;
+}
+
 /* ================= Main Container ================= */
 .main-content {
   max-width: 1400px;
@@ -139,7 +163,7 @@ body {
   padding: 0 1.5rem;
 }
 
-/* ================= KPI Summary Cards ================= */
+/* ================= KPI Summary Cards (Month-End) ================= */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -239,7 +263,7 @@ body {
 }
 
 .btn-save:hover {
-  background-color: #047857;
+  background-color: var(--emerald-hover);
 }
 
 .btn-danger {
@@ -281,7 +305,16 @@ body {
   box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
 }
 
-/* ================= Table Styling ================= */
+.period-input {
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.85rem;
+  outline: none;
+  background-color: #ffffff;
+}
+
+/* ================= Month-End Table Styling ================= */
 .table-card {
   background: #ffffff;
   border-radius: 8px;
@@ -322,18 +355,12 @@ tbody td {
   vertical-align: middle;
 }
 
-.text-right {
-  text-align: right;
-}
-
-.font-medium {
-  font-weight: 500;
-}
-
-.font-mono {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-}
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.font-medium { font-weight: 500; }
+.font-bold { font-weight: 700; }
+.font-mono { font-family: var(--font-mono); font-size: 0.8rem; }
 
 .balance-input {
   width: 125px;
@@ -352,7 +379,6 @@ tbody td {
   box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.15);
 }
 
-/* Warning highlight for rows with End Balance > 10,000 */
 tr.warning-row {
   background-color: var(--warning-bg) !important;
 }
@@ -368,15 +394,8 @@ tr.warning-row .balance-input {
   background-color: #fff;
 }
 
-.reversal-val {
-  font-weight: 600;
-  color: var(--gray-700);
-}
-
-.final-val {
-  font-weight: 700;
-  color: var(--emerald);
-}
+.reversal-val { font-weight: 600; color: var(--gray-700); }
+.final-val { font-weight: 700; color: var(--emerald); }
 
 tfoot tr {
   background-color: #edf2f7;
@@ -386,6 +405,151 @@ tfoot tr {
 
 tfoot td {
   padding: 0.85rem 0.65rem;
+}
+
+/* ================= Daily Cashflow Sub-Tabs & Components ================= */
+.daily-sub-tabs {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--gray-300);
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.daily-sub-tab {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid var(--gray-300);
+  border-bottom: none;
+  background-color: var(--gray-100);
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.daily-sub-tab.active {
+  background-color: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+.section-block {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.section-bar {
+  background: #e0f2fe;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #bae6fd;
+}
+
+.section-bar h2 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.report-table th {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+}
+
+.report-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.row-input {
+  border: 1px solid var(--gray-300);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.row-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.15);
+}
+
+.less-dropdown {
+  font-size: 0.825rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  max-width: 240px;
+  outline: none;
+}
+
+.add-btn {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  font-weight: 600;
+}
+
+.section-total {
+  font-weight: 700;
+  background: #f0f9ff;
+}
+
+/* Upcoming Payment Reminder Banner */
+.reminder-banner {
+  background-color: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.reminder-header {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--amber-text);
+  margin-bottom: 0.25rem;
+}
+
+.reminder-sub {
+  font-size: 0.8rem;
+  color: #b45309;
+}
+
+.reminder-list {
+  margin-top: 0.5rem;
+  list-style: none;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed #fde68a;
+  font-size: 0.825rem;
+  color: #78350f;
+}
+
+.reminder-item:last-child {
+  border-bottom: none;
 }
 
 /* ================= Modals ================= */
@@ -398,8 +562,6 @@ tfoot td {
   align-items: center;
   justify-content: center;
   z-index: 100;
-  opacity: 1;
-  transition: opacity 0.2s ease;
 }
 
 .modal-overlay.hidden {
@@ -414,19 +576,6 @@ tfoot td {
   max-width: 520px;
   margin: 1.5rem;
   padding: 1.75rem;
-  position: relative;
-  animation: modalScale 0.2s ease;
-}
-
-@keyframes modalScale {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
 }
 
 .modal-title {
@@ -571,13 +720,8 @@ tfoot td {
   opacity: 1;
 }
 
-.toast.success {
-  background-color: var(--emerald);
-}
-
-.toast.error {
-  background-color: var(--rose);
-}
+.toast.success { background-color: var(--emerald); }
+.toast.error { background-color: var(--rose); }
 
 /* ================= Print Layout for PDF Export ================= */
 @media print {
@@ -590,12 +734,15 @@ tfoot td {
   }
 
   .header,
+  .portal-nav,
   .toolbar-card,
   .kpi-grid,
+  .daily-sub-tabs,
   .no-print,
   .modal-overlay,
   .lock-screen,
-  .toast {
+  .toast,
+  .add-btn {
     display: none !important;
   }
 
@@ -639,19 +786,13 @@ tfoot td {
     padding: 4px 3px !important;
   }
 
-  .balance-input {
+  .balance-input,
+  .row-input {
     border: none !important;
     background: transparent !important;
     color: inherit !important;
     padding: 0 !important;
-    width: 100% !important;
     font-size: 8.5px !important;
-  }
-
-  tr.warning-row {
-    background-color: #fef2f2 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 
   .print-signatures {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Treasury Month-End Balance Dashboard — FGV Palm Industries</title>
+  <title>Treasury Management Portal — FGV Palm Industries</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27,26 +27,22 @@
           required
         />
         <p id="lock-error" class="lock-error">Sorry, that password isn't right. Please check and try again.</p>
-        <button type="submit" id="unlock-btn" class="btn btn-primary btn-block">Unlock Dashboard</button>
+        <button type="submit" id="unlock-btn" class="btn btn-primary btn-block">Unlock Portal</button>
       </form>
     </div>
   </div>
 
-  <!-- ================= MAIN DASHBOARD APP ================= -->
+  <!-- ================= MAIN PORTAL APP ================= -->
   <div id="dashboard-app" style="display: none;">
     
     <!-- Top Header -->
     <header class="header">
       <div class="header-container">
         <div class="header-title-box">
-          <h1>Project Month-End Balance Dashboard</h1>
-          <p id="period-display-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
+          <h1 id="portal-header-title">Treasury Management Portal</h1>
+          <p id="period-display-text">FGV Palm Industries Sdn. Bhd. (Company No.: 359584-V)</p>
         </div>
         <div class="header-controls">
-          <div class="period-wrapper">
-            <label for="period-picker">Reporting Period:</label>
-            <input type="date" id="period-picker" class="period-input" value="2026-06-30" onchange="changePeriod()">
-          </div>
           <div class="status-badge" id="turso-status" title="Connection Status">
             <span class="status-dot" id="turso-dot"></span>
             <span id="turso-text">Checking...</span>
@@ -56,103 +52,319 @@
       </div>
     </header>
 
-    <!-- Main Content -->
+    <!-- Unified Navigation Bar -->
+    <nav class="portal-nav">
+      <div class="portal-nav-container">
+        <button id="nav-btn-monthend" class="portal-nav-tab active" onclick="switchPortalModule('month-end')">
+          <span>📊</span> Month-End Balance Dashboard (71 Projects)
+        </button>
+        <button id="nav-btn-daily" class="portal-nav-tab" onclick="switchPortalModule('daily-cashflow')">
+          <span>💰</span> Daily Cashflow & Bank Status
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
     <main class="main-content">
       
-      <!-- Print Header (Visible only when printing to PDF) -->
-      <div class="print-header" style="display: none;">
-        <h1>Project Month-End Balance Dashboard</h1>
-        <p id="print-period-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
-      </div>
+      <!-- ================= MODULE 1: MONTH-END BALANCE DASHBOARD ================= -->
+      <section id="module-month-end">
+        <!-- Print Header -->
+        <div class="print-header" style="display: none;">
+          <h1>Project Month-End Balance Dashboard</h1>
+          <p id="print-period-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
+        </div>
 
-      <!-- KPI Overview Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-card-header">Total End Balance</div>
-          <div class="kpi-card-value" id="kpi-total-balance">RM 0.00</div>
-          <div class="kpi-subtext">Sum of all 71 active projects</div>
+        <!-- KPI Overview Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card-header">Total End Balance</div>
+            <div class="kpi-card-value" id="kpi-total-balance">RM 0.00</div>
+            <div class="kpi-subtext">Sum of all 71 active projects</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card-header">Total Auto Reversal</div>
+            <div class="kpi-card-value rose" id="kpi-total-reversal">RM 0.00</div>
+            <div class="kpi-subtext">Balances above RM 10,000 threshold</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card-header">Final Net Balance</div>
+            <div class="kpi-card-value emerald" id="kpi-total-final">RM 0.00</div>
+            <div class="kpi-subtext">After applying all reversals</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card-header">Target Compliance</div>
+            <div class="kpi-card-value" id="kpi-threshold-count">0 / 71</div>
+            <div class="kpi-subtext">Projects requiring auto-reversal</div>
+          </div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-card-header">Total Auto Reversal</div>
-          <div class="kpi-card-value rose" id="kpi-total-reversal">RM 0.00</div>
-          <div class="kpi-subtext">Balances above RM 10,000 threshold</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-card-header">Final Net Balance</div>
-          <div class="kpi-card-value emerald" id="kpi-total-final">RM 0.00</div>
-          <div class="kpi-subtext">After applying all reversals</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-card-header">Target Compliance</div>
-          <div class="kpi-card-value" id="kpi-threshold-count">0 / 71</div>
-          <div class="kpi-subtext">Projects requiring auto-reversal</div>
-        </div>
-      </div>
 
-      <!-- Action Toolbar -->
-      <div class="toolbar-card">
-        <div class="btn-group">
-          <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
-          <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Turso</button>
-          <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
-          <button class="btn btn-outline" onclick="triggerPrint()">🖨️ Export PDF</button>
+        <!-- Action Toolbar -->
+        <div class="toolbar-card">
+          <div class="btn-group">
+            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500;">
+              <span>Period:</span>
+              <input type="date" id="period-picker" class="period-input" value="2026-06-30" onchange="changePeriod()">
+            </div>
+            <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
+            <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Turso</button>
+            <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
+            <button class="btn btn-outline" onclick="triggerPrint()">🖨️ Export PDF</button>
+          </div>
+          <div class="search-box">
+            <input 
+              type="text" 
+              id="search-input" 
+              class="search-input" 
+              placeholder="Search project, BA, account..." 
+              oninput="filterTable()"
+            >
+          </div>
         </div>
-        <div class="search-box">
-          <input 
-            type="text" 
-            id="search-input" 
-            class="search-input" 
-            placeholder="Search project, BA, account..." 
-            oninput="filterTable()"
-          >
-        </div>
-      </div>
 
-      <!-- Projects Data Table -->
-      <div class="table-card">
-        <table id="treasury-table">
-          <thead>
-            <tr>
-              <th style="width: 4%;">No.</th>
-              <th style="width: 25%;">Project</th>
-              <th style="width: 8%;">House Bank</th>
-              <th style="width: 14%;">Account Bank</th>
-              <th style="width: 10%;">GL Code</th>
-              <th style="width: 7%;">BA</th>
-              <th style="width: 11%;" class="text-right">End Balance (RM)</th>
-              <th style="width: 10%;" class="text-right">Auto Reversal (RM)</th>
-              <th style="width: 11%;" class="text-right">Final Balance (RM)</th>
-            </tr>
-          </thead>
-          <tbody id="table-body">
-            <!-- Dynamically populated rows -->
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colspan="6" class="text-right">TOTAL</td>
-              <td class="text-right" id="footer-total-balance">RM 0.00</td>
-              <td class="text-right rose" id="footer-total-reversal">RM 0.00</td>
-              <td class="text-right emerald" id="footer-total-final">RM 0.00</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+        <!-- Projects Data Table -->
+        <div class="table-card">
+          <table id="treasury-table">
+            <thead>
+              <tr>
+                <th style="width: 4%;">No.</th>
+                <th style="width: 25%;">Project</th>
+                <th style="width: 8%;">House Bank</th>
+                <th style="width: 14%;">Account Bank</th>
+                <th style="width: 10%;">GL Code</th>
+                <th style="width: 7%;">BA</th>
+                <th style="width: 11%;" class="text-right">End Balance (RM)</th>
+                <th style="width: 10%;" class="text-right">Auto Reversal (RM)</th>
+                <th style="width: 11%;" class="text-right">Final Balance (RM)</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Populated dynamically -->
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="6" class="text-right">TOTAL</td>
+                <td class="text-right" id="footer-total-balance">RM 0.00</td>
+                <td class="text-right rose" id="footer-total-reversal">RM 0.00</td>
+                <td class="text-right emerald" id="footer-total-final">RM 0.00</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
 
-      <!-- Print Signatures (Visible only when printing) -->
-      <div class="print-signatures" style="display: none;">
-        <div class="signature-box">
-          <p>Prepared by,</p>
-          <div class="signature-line"></div>
+        <!-- Print Signatures for Month-End -->
+        <div class="print-signatures" style="display: none;">
+          <div class="signature-box">
+            <p>Prepared by,</p>
+            <div class="signature-line"></div>
+          </div>
+          <div class="signature-box">
+            <p>Verified by,</p>
+            <div class="signature-line"></div>
+          </div>
+          <div class="signature-box">
+            <p>FGV Palm Industries Sdn. Bhd.</p>
+            <div class="signature-line"></div>
+          </div>
         </div>
-        <div class="signature-box">
-          <p>Verified by,</p>
-          <div class="signature-line"></div>
+      </section>
+
+      <!-- ================= MODULE 2: DAILY CASHFLOW ================= -->
+      <section id="module-daily-cashflow" style="display: none;">
+        
+        <!-- Upcoming Payment Reminder Banner -->
+        <div id="reminder-banner" class="reminder-banner" style="display: none;">
+          <div class="reminder-header">⚠️ Upcoming Payment Reminder</div>
+          <div class="reminder-sub">The following payments are due soon and should be reserved under the Deduction section:</div>
+          <ul id="reminder-list" class="reminder-list"></ul>
         </div>
-        <div class="signature-box">
-          <p>FGV Palm Industries Sdn. Bhd.</p>
-          <div class="signature-line"></div>
+
+        <!-- Daily Cashflow Controls -->
+        <div class="toolbar-card">
+          <div class="btn-group">
+            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--primary);">
+              <span>Daily Cash Status Date:</span>
+              <input type="date" id="daily-report-date" class="period-input" onchange="onDailyDateChange()">
+            </div>
+            <button class="btn btn-save" id="daily-save-btn" onclick="saveDailyCashflowToTurso()">💾 Save Daily Cashflow to Turso</button>
+            <button class="btn btn-outline" onclick="exportDailyPDF()">🖨️ Export PDF</button>
+          </div>
         </div>
-      </div>
+
+        <!-- Daily Cashflow Sub-Tabs -->
+        <div class="daily-sub-tabs">
+          <button id="daily-tab-btn-1" class="daily-sub-tab active" onclick="switchDailyTab(1)">MBB 564098-512859</button>
+          <button id="daily-tab-btn-2" class="daily-sub-tab" onclick="switchDailyTab(2)">MBB 564212-106476</button>
+          <button id="daily-tab-btn-3" class="daily-sub-tab" onclick="switchDailyTab(3)">Expected Outgoing Payment</button>
+        </div>
+
+        <!-- Tab 1: MBB 564098512859 -->
+        <div id="daily-page-1">
+          <p class="font-bold text-sm mb-2" style="color: var(--primary);">Account: MBB 564098-512859</p>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Bank Position</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-2859-s1">
+                <thead>
+                  <tr>
+                    <th class="text-left" style="width: 60%;">Description</th>
+                    <th class="text-right" style="width: 30%;">Amount (RM)</th>
+                    <th style="width: 10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cash-body-2859-s1"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Deductions</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-2859-s2">
+                <thead>
+                  <tr>
+                    <th class="text-left" style="width: 60%;">Description</th>
+                    <th class="text-right" style="width: 30%;">Amount (RM)</th>
+                    <th style="width: 10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cash-body-2859-s2"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Final Position</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-2859-s3">
+                <tbody id="cash-body-2859-s3"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Investment Placement & Returns</h2></div>
+            <div style="padding: 0.75rem; overflow-x: auto;">
+              <table class="report-table" id="table-invest-2859">
+                <thead>
+                  <tr>
+                    <th>Institution</th>
+                    <th>Date</th>
+                    <th>Maturity</th>
+                    <th class="text-center">Day</th>
+                    <th class="text-right">Rate %</th>
+                    <th class="text-right">Profit (RM)</th>
+                    <th>From</th>
+                    <th class="text-right">Balance</th>
+                    <th class="text-right">Placement</th>
+                    <th class="text-right">Total (RM)</th>
+                  </tr>
+                </thead>
+                <tbody id="invest-body-2859"></tbody>
+              </table>
+              <div style="margin-top: 0.75rem;">
+                <button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="addInvestRow('2859')">+ Add Investment Row</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: MBB 564212106476 -->
+        <div id="daily-page-2" style="display: none;">
+          <p class="font-bold text-sm mb-2" style="color: var(--primary);">Account: MBB 564212-106476</p>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Bank Position</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-6476-s1">
+                <thead>
+                  <tr>
+                    <th class="text-left" style="width: 60%;">Description</th>
+                    <th class="text-right" style="width: 30%;">Amount (RM)</th>
+                    <th style="width: 10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cash-body-6476-s1"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Deductions</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-6476-s2">
+                <thead>
+                  <tr>
+                    <th class="text-left" style="width: 60%;">Description</th>
+                    <th class="text-right" style="width: 30%;">Amount (RM)</th>
+                    <th style="width: 10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cash-body-6476-s2"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Final Position</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-6476-s3">
+                <tbody id="cash-body-6476-s3"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-block">
+            <div class="section-bar"><h2>Investment Placement & Returns</h2></div>
+            <div style="padding: 0.75rem; overflow-x: auto;">
+              <table class="report-table" id="table-invest-6476">
+                <thead>
+                  <tr>
+                    <th>Institution</th>
+                    <th>Date</th>
+                    <th>Maturity</th>
+                    <th class="text-center">Day</th>
+                    <th class="text-right">Rate %</th>
+                    <th class="text-right">Profit (RM)</th>
+                    <th>From</th>
+                    <th class="text-right">Balance</th>
+                    <th class="text-right">Placement</th>
+                    <th class="text-right">Total (RM)</th>
+                  </tr>
+                </thead>
+                <tbody id="invest-body-6476"></tbody>
+              </table>
+              <div style="margin-top: 0.75rem;">
+                <button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="addInvestRow('6476')">+ Add Investment Row</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Expected Outgoing Payment -->
+        <div id="daily-page-3" style="display: none;">
+          <div class="section-block">
+            <div class="section-bar"><h2>Expected Outgoing Payment Schedule</h2></div>
+            <div style="padding: 0.75rem;">
+              <table class="report-table" id="table-outgoing">
+                <thead>
+                  <tr>
+                    <th class="text-left" style="width: 45%;">Outgoing Payment Description</th>
+                    <th class="text-right" style="width: 30%;">Amount (RM)</th>
+                    <th class="text-right" style="width: 25%;">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody id="outgoing-body"></tbody>
+              </table>
+              <div style="margin-top: 0.75rem;">
+                <button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="addOutgoingItem()">+ Add Custom Outgoing Item</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
 
     </main>
   </div>
