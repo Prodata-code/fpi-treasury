@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Treasury Month-End Balance Dashboard — FGV Palm Industries</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ================= PASSWORD LOCK SCREEN ================= -->
+  <div id="lock-screen" class="lock-screen">
+    <div class="lock-box">
+      <div class="lock-icon-circle">🔒</div>
+      <h2 class="lock-title">Treasury Access Required</h2>
+      <p class="lock-subtitle">FGV Palm Industries Sdn. Bhd.<br>Enter the security password to proceed.</p>
+      <form id="lock-form" onsubmit="handleLogin(event)">
+        <input 
+          type="password" 
+          id="password-input" 
+          class="lock-input" 
+          placeholder="Enter password..." 
+          autocomplete="current-password"
+          required
+        />
+        <p id="lock-error" class="lock-error">Sorry, that password isn't right. Please check and try again.</p>
+        <button type="submit" id="unlock-btn" class="btn btn-primary btn-block">Unlock Dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MAIN DASHBOARD APP ================= -->
+  <div id="dashboard-app" style="display: none;">
+    
+    <!-- Top Header -->
+    <header class="header">
+      <div class="header-container">
+        <div class="header-title-box">
+          <h1>Project Month-End Balance Dashboard</h1>
+          <p id="period-display-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
+        </div>
+        <div class="header-controls">
+          <div class="period-wrapper">
+            <label for="period-picker">Reporting Period:</label>
+            <input type="date" id="period-picker" class="period-input" value="2026-06-30" onchange="changePeriod()">
+          </div>
+          <div class="status-badge" id="turso-status" title="Turso Database Connection">
+            <span class="status-dot" id="turso-dot"></span>
+            <span id="turso-text">Turso Connected</span>
+          </div>
+          <button class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;" onclick="handleLogout()">Lock</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      
+      <!-- Print Header (Visible only when printing to PDF) -->
+      <div class="print-header" style="display: none;">
+        <h1>Project Month-End Balance Dashboard</h1>
+        <p id="print-period-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
+      </div>
+
+      <!-- KPI Overview Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-card-header">Total End Balance</div>
+          <div class="kpi-card-value" id="kpi-total-balance">RM 0.00</div>
+          <div class="kpi-subtext">Sum of all 71 active projects</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card-header">Total Auto Reversal</div>
+          <div class="kpi-card-value rose" id="kpi-total-reversal">RM 0.00</div>
+          <div class="kpi-subtext">Balances above RM 10,000 threshold</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card-header">Final Net Balance</div>
+          <div class="kpi-card-value emerald" id="kpi-total-final">RM 0.00</div>
+          <div class="kpi-subtext">After applying all reversals</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card-header">Target Compliance</div>
+          <div class="kpi-card-value" id="kpi-threshold-count">0 / 71</div>
+          <div class="kpi-subtext">Projects requiring auto-reversal</div>
+        </div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="toolbar-card">
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
+          <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Turso</button>
+          <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
+          <button class="btn btn-outline" onclick="triggerPrint()">🖨️ Export PDF</button>
+        </div>
+        <div class="search-box">
+          <input 
+            type="text" 
+            id="search-input" 
+            class="search-input" 
+            placeholder="Search project, BA, account..." 
+            oninput="filterTable()"
+          >
+        </div>
+      </div>
+
+      <!-- Projects Data Table -->
+      <div class="table-card">
+        <table id="treasury-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No.</th>
+              <th style="width: 25%;">Project</th>
+              <th style="width: 8%;">House Bank</th>
+              <th style="width: 14%;">Account Bank</th>
+              <th style="width: 10%;">GL Code</th>
+              <th style="width: 7%;">BA</th>
+              <th style="width: 11%;" class="text-right">End Balance (RM)</th>
+              <th style="width: 10%;" class="text-right">Auto Reversal (RM)</th>
+              <th style="width: 11%;" class="text-right">Final Balance (RM)</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Dynamically populated rows -->
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6" class="text-right">TOTAL</td>
+              <td class="text-right" id="footer-total-balance">RM 0.00</td>
+              <td class="text-right rose" id="footer-total-reversal">RM 0.00</td>
+              <td class="text-right emerald" id="footer-total-final">RM 0.00</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Print Signatures (Visible only when printing) -->
+      <div class="print-signatures" style="display: none;">
+        <div class="signature-box">
+          <p>Prepared by,</p>
+          <div class="signature-line"></div>
+        </div>
+        <div class="signature-box">
+          <p>Verified by,</p>
+          <div class="signature-line"></div>
+        </div>
+        <div class="signature-box">
+          <p>FGV Palm Industries Sdn. Bhd.</p>
+          <div class="signature-line"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= PASTE FROM SAP MODAL ================= -->
+  <div id="paste-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 class="modal-title">Paste Data from SAP</h3>
+      <p class="modal-desc">
+        Copy your table columns directly from SAP and paste below.<br>
+        <strong>Option 1:</strong> List of balances (matches table in BA code order)<br>
+        <strong>Option 2:</strong> Tab-separated <code>[BA] [Balance]</code> (auto-matches by BA code)
+      </p>
+      <textarea 
+        id="paste-area" 
+        class="paste-area" 
+        placeholder="Paste here...&#10;Example:&#10;4109&#9;12,757.45&#10;4046&#9;8,302.03"
+      ></textarea>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closePasteModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="applyPaste()">Apply to Table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RESET CONFIRMATION MODAL ================= -->
+  <div id="reset-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 class="modal-title">Reset End Balances</h3>
+      <p class="modal-desc">
+        Are you sure you want to clear all End Balance figures for this period to 0.00?
+        Click "Save to Turso" afterwards to persist the reset.
+      </p>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeResetModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="applyReset()">Yes, Clear Balances</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TOAST NOTIFICATION ================= -->
+  <div id="toast" class="toast">
+    <span id="toast-message">Notification message</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

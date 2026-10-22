@@ -1,0 +1,21 @@
+# Secrets and Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Netlify temporary build directories
+.netlify/
+
+# System and logs
+*.log
+.DS_Store
+Thumbs.db
+
+# Old Canva offline dump files
+Protected Website.html
+Protected Website_files/
+Treasury Month-End Balance Dashboard.html
+Treasury Month-End Balance Dashboard_files/

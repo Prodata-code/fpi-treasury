@@ -1,0 +1,13 @@
+{
+  "name": "fpi-treasury-dashboard",
+  "version": "1.0.0",
+  "description": "FGV Palm Industries Project Month-End Balance Dashboard with Turso and Netlify",
+  "main": "netlify/functions/balances.js",
+  "type": "module",
+  "scripts": {
+    "start": "netlify dev"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
+  }
+}
