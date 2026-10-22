@@ -333,11 +333,44 @@ async function fetchBalances() {
   renderTable();
 }
 
-async function saveToTurso() {
+// ================= AUTO-SAVE TIMERS & HELPERS =================
+let monthEndAutoSaveTimer = null;
+let dailyAutoSaveTimer = null;
+
+function triggerMonthEndAutoSave(delayMs = 1200) {
+  const saveBtn = document.getElementById('save-btn');
+  if (saveBtn) {
+    saveBtn.textContent = '⏳ Saving to Database in 1s...';
+    saveBtn.style.backgroundColor = '#f59e0b';
+  }
+  clearTimeout(monthEndAutoSaveTimer);
+  monthEndAutoSaveTimer = setTimeout(async () => {
+    await saveToTurso(true);
+  }, delayMs);
+}
+
+function triggerDailyAutoSave(delayMs = 1200) {
+  if (isRestoringDaily) return;
+  const saveBtn = document.getElementById('daily-save-btn');
+  if (saveBtn) {
+    saveBtn.textContent = '⏳ Saving to Database in 1s...';
+    saveBtn.style.backgroundColor = '#f59e0b';
+  }
+  clearTimeout(dailyAutoSaveTimer);
+  dailyAutoSaveTimer = setTimeout(async () => {
+    await saveDailyCashflowToTurso(true);
+  }, delayMs);
+}
+
+async function saveToTurso(isAutoSave = false) {
+  clearTimeout(monthEndAutoSaveTimer);
   const period = document.getElementById('period-picker').value || '2026-06-30';
   const saveBtn = document.getElementById('save-btn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving to Database...';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = isAutoSave ? '🔄 Auto-saving to Database...' : 'Saving to Database...';
+    saveBtn.style.backgroundColor = isAutoSave ? '#2563eb' : '';
+  }
 
   const items = projectsData.map(p => ({
     ba: p.ba,
@@ -373,21 +406,33 @@ async function saveToTurso() {
 
     if (res.ok) {
       hasUnsavedChanges = false;
-      saveBtn.textContent = 'Saved to Database!';
-      saveBtn.style.backgroundColor = '#059669';
-      showToast('All 71 project balances successfully saved to database!');
+      if (saveBtn) {
+        saveBtn.textContent = isAutoSave ? '✅ Saved to Database' : 'Saved to Database!';
+        saveBtn.style.backgroundColor = '#059669';
+      }
+      if (!isAutoSave) {
+        showToast('All 71 project balances successfully saved to database!');
+      }
       setTimeout(() => {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save to Database';
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 Save to Database';
+          saveBtn.style.backgroundColor = '';
+        }
       }, 2500);
       return;
     }
   } catch (err) {
-    showToast('Failed to save to database: ' + err.message, 'error');
+    if (!isAutoSave) {
+      showToast('Failed to save to database: ' + err.message, 'error');
+    }
   }
 
-  saveBtn.disabled = false;
-  saveBtn.textContent = '💾 Save to Database';
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save to Database';
+    saveBtn.style.backgroundColor = '';
+  }
 }
 
 function updatePeriodDisplay(dateStr) {
@@ -396,6 +441,7 @@ function updatePeriodDisplay(dateStr) {
 }
 
 function changePeriod() {
+  clearTimeout(monthEndAutoSaveTimer);
   const period = document.getElementById('period-picker').value;
   updatePeriodDisplay(period);
   fetchBalances();
@@ -475,9 +521,7 @@ function onBalanceChange(input) {
   if (target) {
     target.balance = numVal;
     renderTable();
-    const saveBtn = document.getElementById('save-btn');
-    saveBtn.textContent = '💾 Save to Database (Unsaved)';
-    saveBtn.style.backgroundColor = '#e11d48';
+    triggerMonthEndAutoSave(1200);
   }
 }
 
@@ -491,9 +535,7 @@ function applyReset() {
   projectsData.forEach(p => { p.balance = 0; });
   closeResetModal();
   renderTable();
-  const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save to Database (Unsaved)';
-  saveBtn.style.backgroundColor = '#e11d48';
+  triggerMonthEndAutoSave(300);
   showToast('All project balances cleared to 0.');
 }
 
@@ -544,9 +586,7 @@ function applyPaste() {
 
   closePasteModal();
   renderTable();
-  const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save to Database (Unsaved)';
-  saveBtn.style.backgroundColor = '#e11d48';
+  triggerMonthEndAutoSave(300);
 }
 
 function triggerPrint() { window.print(); }
@@ -580,12 +620,6 @@ function buildDailyTables() {
     const body = document.getElementById(`invest-body-${prefix}`);
     if (body && body.children.length === 0) {
       defaultInvest.forEach(r => createInvestRow(prefix, r));
-    }
-  });
-
-  document.addEventListener('input', (e) => {
-    if (e.target.closest('#module-daily-cashflow')) {
-      recalcDaily();
     }
   });
 }
@@ -864,7 +898,6 @@ function getRowLabel(row) {
 }
 
 function recalcDaily() {
-  if (isRestoringDaily) return;
   ['2859', '6476'].forEach(prefix => {
     // Recalc investments
     const invBody = document.getElementById(`invest-body-${prefix}`);
@@ -883,6 +916,10 @@ function recalcDaily() {
   if (outTotEl) outTotEl.textContent = fmt(outTot);
 
   checkUpcomingPayments();
+
+  if (!isRestoringDaily) {
+    triggerDailyAutoSave(1200);
+  }
 }
 
 function recalcAccountSection(prefix) {
@@ -1012,10 +1049,14 @@ function serializeDailyState() {
   };
 }
 
-async function saveDailyCashflowToTurso() {
+async function saveDailyCashflowToTurso(isAutoSave = false) {
+  clearTimeout(dailyAutoSaveTimer);
   const saveBtn = document.getElementById('daily-save-btn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving Daily Cashflow...';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = isAutoSave ? '🔄 Auto-saving to Database...' : 'Saving Daily Cashflow...';
+    saveBtn.style.backgroundColor = isAutoSave ? '#2563eb' : '';
+  }
 
   const state = serializeDailyState();
   const dateStr = state.report_date;
@@ -1053,21 +1094,33 @@ async function saveDailyCashflowToTurso() {
     });
 
     if (res.ok) {
-      saveBtn.textContent = 'Saved to Database!';
-      saveBtn.style.backgroundColor = '#059669';
-      showToast(`Daily Cashflow for ${dateStr} saved to database!`);
+      if (saveBtn) {
+        saveBtn.textContent = isAutoSave ? '✅ Saved to Database' : 'Saved to Database!';
+        saveBtn.style.backgroundColor = '#059669';
+      }
+      if (!isAutoSave) {
+        showToast(`Daily Cashflow for ${dateStr} saved to database!`);
+      }
       setTimeout(() => {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save Daily Cashflow to Database';
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 Save Daily Cashflow to Database';
+          saveBtn.style.backgroundColor = '';
+        }
       }, 2500);
       return;
     }
   } catch (err) {
-    showToast('Failed to save to database: ' + err.message, 'error');
+    if (!isAutoSave) {
+      showToast('Failed to save to database: ' + err.message, 'error');
+    }
   }
 
-  saveBtn.disabled = false;
-  saveBtn.textContent = '💾 Save Daily Cashflow to Database';
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save Daily Cashflow to Database';
+    saveBtn.style.backgroundColor = '';
+  }
 }
 
 async function fetchDailyCashflowFromTurso() {
@@ -1196,12 +1249,26 @@ function restoreDailyState(state) {
 }
 
 function onDailyDateChange() {
+  clearTimeout(dailyAutoSaveTimer);
   fetchDailyCashflowFromTurso();
 }
 
 function exportDailyPDF() {
   window.print();
 }
+
+// Global Event Listeners for Daily Cashflow auto-recalc and auto-save
+document.addEventListener('input', (e) => {
+  if (e.target.closest('#module-daily-cashflow')) {
+    recalcDaily();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target.closest('#module-daily-cashflow') && e.target.id !== 'daily-report-date') {
+    recalcDaily();
+  }
+});
 
 // Initial check on page load
 window.addEventListener('DOMContentLoaded', () => {
