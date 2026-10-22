@@ -141,18 +141,23 @@ async function handleLogin(e) {
   unlockBtn.disabled = true;
   unlockBtn.textContent = 'Verifying...';
 
+  const resetBtn = () => {
+    unlockBtn.disabled = false;
+    unlockBtn.textContent = 'Unlock Portal';
+  };
+
   const isStaticMode = window.location.hostname.includes('github.io') || window.location.protocol === 'file:';
 
   if (isStaticMode) {
     if (password === '#Treasury26') {
       sessionStorage.setItem('fpi_treasury_token', 'gh-pages-session');
+      resetBtn();
       unlockPortal();
     } else {
       passwordInput.classList.add('error');
       lockError.textContent = "Incorrect password. Please try again.";
       lockError.style.display = 'block';
-      unlockBtn.disabled = false;
-      unlockBtn.textContent = 'Unlock Portal';
+      resetBtn();
     }
     return;
   }
@@ -182,8 +187,7 @@ async function handleLogin(e) {
       lockError.style.display = 'block';
     }
   } finally {
-    unlockBtn.disabled = false;
-    unlockBtn.textContent = 'Unlock Portal';
+    resetBtn();
   }
 }
 
@@ -207,7 +211,23 @@ function handleLogout() {
   sessionStorage.removeItem('fpi_treasury_token');
   document.getElementById('dashboard-app').style.display = 'none';
   document.getElementById('lock-screen').style.display = 'flex';
-  document.getElementById('password-input').value = '';
+  
+  const passwordInput = document.getElementById('password-input');
+  const unlockBtn = document.getElementById('unlock-btn');
+  const lockError = document.getElementById('lock-error');
+
+  if (passwordInput) {
+    passwordInput.value = '';
+    passwordInput.classList.remove('error');
+    passwordInput.focus();
+  }
+  if (unlockBtn) {
+    unlockBtn.disabled = false;
+    unlockBtn.textContent = 'Unlock Portal';
+  }
+  if (lockError) {
+    lockError.style.display = 'none';
+  }
 }
 
 function checkExistingAuth() {
@@ -1089,7 +1109,11 @@ async function fetchDailyCashflowFromTurso() {
   const cached = localStorage.getItem(`fpi_daily_${dateStr}`);
   if (cached) {
     restoreDailyState(JSON.parse(cached));
+    return;
   }
+
+  // If no record found for this date, reset to clean default tables
+  buildDailyTables();
 }
 
 function restoreDailyState(state) {
