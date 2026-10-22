@@ -124,6 +124,10 @@ body {
   background-color: #10b981;
 }
 
+.status-dot.test {
+  background-color: #3b82f6;
+}
+
 .status-dot.offline {
   background-color: #f59e0b;
 }
