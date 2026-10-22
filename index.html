@@ -40,7 +40,7 @@
       <div class="header-container">
         <div class="header-title-box">
           <h1 id="portal-header-title">Treasury Management Portal</h1>
-          <p id="period-display-text">FGV Palm Industries Sdn. Bhd. (Company No.: 359584-V)</p>
+          <p id="period-display-text">FGV Palm Industries Sdn. Bhd.</p>
         </div>
         <div class="header-controls">
           <div class="status-badge" id="turso-status" title="Connection Status">
@@ -72,7 +72,7 @@
         <!-- Print Header -->
         <div class="print-header" style="display: none;">
           <h1>Project Month-End Balance Dashboard</h1>
-          <p id="print-period-text">FGV Palm Industries Sdn. Bhd. — Period: 30/06/2026</p>
+          <p id="print-period-text">FGV Palm Industries Sdn. Bhd.</p>
         </div>
 
         <!-- KPI Overview Cards -->
@@ -107,7 +107,7 @@
               <input type="date" id="period-picker" class="period-input" value="2026-06-30" onchange="changePeriod()">
             </div>
             <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
-            <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Turso</button>
+            <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Database</button>
             <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
             <button class="btn btn-outline" onclick="triggerPrint()">🖨️ Export PDF</button>
           </div>
@@ -186,7 +186,7 @@
               <span>Daily Cash Status Date:</span>
               <input type="date" id="daily-report-date" class="period-input" onchange="onDailyDateChange()">
             </div>
-            <button class="btn btn-save" id="daily-save-btn" onclick="saveDailyCashflowToTurso()">💾 Save Daily Cashflow to Turso</button>
+            <button class="btn btn-save" id="daily-save-btn" onclick="saveDailyCashflowToTurso()">💾 Save Daily Cashflow to Database</button>
             <button class="btn btn-outline" onclick="exportDailyPDF()">🖨️ Export PDF</button>
           </div>
         </div>
@@ -396,7 +396,7 @@
       <h3 class="modal-title">Reset End Balances</h3>
       <p class="modal-desc">
         Are you sure you want to clear all End Balance figures for this period to 0.00?
-        Click "Save to Turso" afterwards to persist the reset.
+        Click "Save to Database" afterwards to persist the reset.
       </p>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeResetModal()">Cancel</button>

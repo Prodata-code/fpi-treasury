@@ -255,7 +255,7 @@ async function fetchBalances() {
       if (result.success && Array.isArray(result.data)) {
         projectsData = result.data;
         tursoDot.className = 'status-dot';
-        tursoText.textContent = 'Netlify (Turso Live)';
+        tursoText.textContent = 'Netlify (Database Live)';
         renderTable();
         return;
       }
@@ -297,7 +297,7 @@ async function fetchBalances() {
           balance: Number(r[6].value)
         }));
         tursoDot.className = 'status-dot test';
-        tursoText.textContent = 'GitHub Pages (Turso Live)';
+        tursoText.textContent = 'GitHub Pages (Database Live)';
         renderTable();
         return;
       }
@@ -317,7 +317,7 @@ async function saveToTurso() {
   const period = document.getElementById('period-picker').value || '2026-06-30';
   const saveBtn = document.getElementById('save-btn');
   saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving to Turso...';
+  saveBtn.textContent = 'Saving to Database...';
 
   const items = projectsData.map(p => ({
     ba: p.ba,
@@ -353,28 +353,26 @@ async function saveToTurso() {
 
     if (res.ok) {
       hasUnsavedChanges = false;
-      saveBtn.textContent = 'Saved to Turso!';
+      saveBtn.textContent = 'Saved to Database!';
       saveBtn.style.backgroundColor = '#059669';
-      showToast('All 71 project balances successfully saved to Turso cloud database!');
+      showToast('All 71 project balances successfully saved to database!');
       setTimeout(() => {
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save to Turso';
+        saveBtn.textContent = '💾 Save to Database';
       }, 2500);
       return;
     }
   } catch (err) {
-    showToast('Failed to save to Turso: ' + err.message, 'error');
+    showToast('Failed to save to database: ' + err.message, 'error');
   }
 
   saveBtn.disabled = false;
-  saveBtn.textContent = '💾 Save to Turso';
+  saveBtn.textContent = '💾 Save to Database';
 }
 
 function updatePeriodDisplay(dateStr) {
-  const parts = dateStr.split('-');
-  const formatted = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
-  document.getElementById('period-display-text').textContent = `FGV Palm Industries Sdn. Bhd. — Period: ${formatted}`;
-  document.getElementById('print-period-text').textContent = `FGV Palm Industries Sdn. Bhd. — Period: ${formatted}`;
+  document.getElementById('period-display-text').textContent = 'FGV Palm Industries Sdn. Bhd.';
+  document.getElementById('print-period-text').textContent = 'FGV Palm Industries Sdn. Bhd.';
 }
 
 function changePeriod() {
@@ -458,7 +456,7 @@ function onBalanceChange(input) {
     target.balance = numVal;
     renderTable();
     const saveBtn = document.getElementById('save-btn');
-    saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+    saveBtn.textContent = '💾 Save to Database (Unsaved)';
     saveBtn.style.backgroundColor = '#e11d48';
   }
 }
@@ -474,7 +472,7 @@ function applyReset() {
   closeResetModal();
   renderTable();
   const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+  saveBtn.textContent = '💾 Save to Database (Unsaved)';
   saveBtn.style.backgroundColor = '#e11d48';
   showToast('All project balances cleared to 0.');
 }
@@ -527,7 +525,7 @@ function applyPaste() {
   closePasteModal();
   renderTable();
   const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save to Turso (Unsaved)';
+  saveBtn.textContent = '💾 Save to Database (Unsaved)';
   saveBtn.style.backgroundColor = '#e11d48';
 }
 
@@ -1035,21 +1033,21 @@ async function saveDailyCashflowToTurso() {
     });
 
     if (res.ok) {
-      saveBtn.textContent = 'Saved to Turso!';
+      saveBtn.textContent = 'Saved to Database!';
       saveBtn.style.backgroundColor = '#059669';
-      showToast(`Daily Cashflow for ${dateStr} saved to Turso database!`);
+      showToast(`Daily Cashflow for ${dateStr} saved to database!`);
       setTimeout(() => {
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save Daily Cashflow to Turso';
+        saveBtn.textContent = '💾 Save Daily Cashflow to Database';
       }, 2500);
       return;
     }
   } catch (err) {
-    showToast('Failed to save to Turso: ' + err.message, 'error');
+    showToast('Failed to save to database: ' + err.message, 'error');
   }
 
   saveBtn.disabled = false;
-  saveBtn.textContent = '💾 Save Daily Cashflow to Turso';
+  saveBtn.textContent = '💾 Save Daily Cashflow to Database';
 }
 
 async function fetchDailyCashflowFromTurso() {
