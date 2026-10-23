@@ -870,14 +870,14 @@ function updateDailyBadge(status, dateStr) {
   const badge = document.getElementById('daily-record-badge');
   if (!badge) return;
   if (status === 'checking') {
-    badge.className = 'status-badge checking';
-    badge.innerHTML = '<span class="status-dot"></span><span>Menyemak rekod (' + (dateStr || '') + ')...</span>';
+    badge.className = 'record-badge checking';
+    badge.innerHTML = '<span class="record-badge-dot"></span><span>Menyemak database (' + (dateStr || '') + ')...</span>';
   } else if (status === 'found') {
-    badge.className = 'status-badge found';
-    badge.innerHTML = '<span class="status-dot"></span><span>🟢 Rekod Dijumpai (' + (dateStr || '') + ')</span>';
+    badge.className = 'record-badge found';
+    badge.innerHTML = '<span class="record-badge-dot"></span><span>Turso: Rekod Sedia Ada (' + (dateStr || '') + ')</span>';
   } else if (status === 'clean') {
-    badge.className = 'status-badge clean';
-    badge.innerHTML = '<span class="status-dot"></span><span>⚪ Tiada Rekod (' + (dateStr || '') + ') — Borang Bersih</span>';
+    badge.className = 'record-badge clean';
+    badge.innerHTML = '<span class="record-badge-dot"></span><span>Tiada Rekod (' + (dateStr || '') + ') — Borang Bersih</span>';
   }
 }
 
