@@ -1104,10 +1104,41 @@ tr.warning-row .balance-input {
    RESPONSIVE MOBILE & TABLET STYLES
    ========================================================================== */
 
+/* Strict Viewport Containment */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+#dashboard-app,
+.header,
+.portal-nav,
+.main-content,
+#module-daily-cashflow,
+#module-month-end,
+.daily-toolbar-card,
+.account-hero-card,
+.section-block,
+.table-card {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Table Horizontal Scrolling Base Wrappers */
+.section-block {
+  width: 100%;
+  overflow: hidden;
+}
+
 .section-block-body,
 .section-block > div:not(.section-bar),
 .table-card {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -1161,31 +1192,33 @@ tr.warning-row .balance-input {
 
   /* Header adjustments */
   .header {
-    padding: 0.75rem 0;
+    padding: 0.65rem 0;
+    width: 100%;
   }
   .header-container {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
-    padding: 0 0.85rem;
+    gap: 0.65rem;
+    padding: 0 0.75rem;
+    width: 100%;
   }
   .header-brand-wrap {
     justify-content: flex-start;
     width: 100%;
-    gap: 0.75rem;
+    gap: 0.65rem;
   }
   .header-logo-badge {
-    width: 38px;
-    height: 38px;
-    font-size: 1.25rem;
+    width: 36px;
+    height: 36px;
+    font-size: 1.2rem;
     flex-shrink: 0;
   }
   .header-title-box h1 {
-    font-size: 1.05rem;
-    line-height: 1.25;
+    font-size: 1rem;
+    line-height: 1.2;
   }
   .header-title-box p {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
   .header-controls {
     display: flex;
@@ -1195,11 +1228,11 @@ tr.warning-row .balance-input {
     gap: 0.5rem;
   }
   .header-controls .status-badge {
-    font-size: 0.72rem;
-    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
+    padding: 0.35rem 0.6rem;
   }
   .btn-lock {
-    padding: 0.35rem 0.75rem;
+    padding: 0.35rem 0.7rem;
     font-size: 0.75rem;
   }
 
@@ -1209,49 +1242,52 @@ tr.warning-row .balance-input {
     -webkit-overflow-scrolling: touch;
     white-space: nowrap;
     scrollbar-width: none;
-    padding: 0 0.85rem 2px 0.85rem;
+    padding: 0 0.75rem 2px 0.75rem;
     display: flex;
     gap: 0.5rem;
+    width: 100%;
   }
   .portal-nav-container::-webkit-scrollbar {
     display: none;
   }
   .portal-nav-tab {
-    padding: 0.75rem 1rem;
-    font-size: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.82rem;
     flex-shrink: 0;
   }
 
   /* Main content padding */
   .main-content {
-    padding: 1rem 0.75rem 3rem 0.75rem;
+    padding: 0.85rem 0.65rem 3rem 0.65rem;
+    width: 100%;
   }
 
   /* Month-End KPI Grid */
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
   }
   .kpi-card {
-    padding: 0.85rem 1rem;
+    padding: 0.75rem 0.85rem;
   }
   .kpi-card-header {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
   }
   .kpi-card-value {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
   }
   .kpi-subtext {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
   }
 
   /* Month-End Toolbar Card */
   .toolbar-card {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.85rem;
-    padding: 0.85rem;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    width: 100%;
   }
   .toolbar-card .btn-group {
     flex-direction: column;
@@ -1268,7 +1304,7 @@ tr.warning-row .balance-input {
   }
   .period-dropdown {
     flex: 1;
-    min-width: 110px;
+    min-width: 100px;
     height: 38px;
     font-size: 0.85rem;
   }
@@ -1276,7 +1312,7 @@ tr.warning-row .balance-input {
     width: 100%;
     justify-content: center;
     padding: 0.6rem 1rem;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
   }
   .search-box {
     width: 100%;
@@ -1289,22 +1325,23 @@ tr.warning-row .balance-input {
 
   /* Daily Cashflow Toolbar */
   .daily-toolbar-card {
-    padding: 0.85rem;
+    padding: 0.75rem;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.85rem;
+    gap: 0.75rem;
+    width: 100%;
   }
   .daily-toolbar-left {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
-    gap: 0.75rem;
+    gap: 0.65rem;
   }
   .date-selector-wrapper {
     flex-direction: column;
     align-items: flex-start;
     width: 100%;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
   .toolbar-label {
     font-size: 0.78rem;
@@ -1313,45 +1350,59 @@ tr.warning-row .balance-input {
   .date-nav-group {
     width: 100%;
     display: flex;
-    align-items: stretch;
-    gap: 0.35rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 2px;
   }
   .btn-date-nav {
-    width: 42px;
-    height: 42px;
-    font-size: 0.9rem;
+    width: 36px;
+    height: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
     flex-shrink: 0;
   }
   .modern-date-picker {
     flex: 1;
     min-width: 0;
-    height: 42px;
-    font-size: 0.9rem;
+    width: 100%;
+    height: 38px;
+    font-size: 0.85rem !important;
+    text-align: center;
+    padding: 0 4px !important;
   }
   .btn-date-today {
-    padding: 0 0.85rem;
-    height: 42px;
-    font-size: 0.85rem;
+    height: 38px;
+    padding: 0 0.65rem;
+    font-size: 0.78rem;
     flex-shrink: 0;
+    white-space: nowrap;
   }
   .record-badge {
     width: 100%;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.78rem;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.75rem;
     text-align: center;
   }
   .daily-toolbar-card .btn-group {
     width: 100%;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.5rem;
   }
   .daily-toolbar-card .btn-group .btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     justify-content: center;
-    padding: 0.65rem 1rem;
-    font-size: 0.85rem;
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
   }
 
   /* Daily Sub-tabs swipeable */
@@ -1360,32 +1411,34 @@ tr.warning-row .balance-input {
     -webkit-overflow-scrolling: touch;
     white-space: nowrap;
     scrollbar-width: none;
-    gap: 0.5rem;
-    padding: 0 0.2rem 4px 0.2rem;
-    margin-bottom: 1rem;
+    gap: 0.4rem;
+    padding: 0 0.1rem 4px 0.1rem;
+    margin-bottom: 0.85rem;
+    width: 100%;
   }
   .daily-sub-tabs::-webkit-scrollbar {
     display: none;
   }
   .daily-sub-tab {
     flex-shrink: 0;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.8rem;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.78rem;
   }
 
   /* Account Hero Card */
   .account-hero-card {
-    padding: 1rem;
-    margin-bottom: 1.25rem;
+    padding: 0.85rem;
+    margin-bottom: 1rem;
     flex-direction: column;
     align-items: stretch;
-    gap: 1rem;
+    gap: 0.85rem;
+    width: 100%;
   }
   .account-hero-badge {
     font-size: 0.65rem;
   }
   .account-hero-title {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
   }
   .account-hero-num {
     font-size: 0.78rem;
@@ -1393,43 +1446,51 @@ tr.warning-row .balance-input {
   .account-hero-metrics {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
+    gap: 0.35rem;
     width: 100%;
   }
   .hero-metric-item {
-    padding: 0.6rem 0.5rem;
+    padding: 0.5rem 0.35rem;
     text-align: center;
+    min-width: 0;
   }
   .metric-label {
-    font-size: 0.62rem;
+    font-size: 0.58rem;
     letter-spacing: 0;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .metric-val {
-    font-size: 1.05rem;
-    word-break: break-all;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Section Bars & Tables */
   .section-bar {
-    padding: 0.75rem 1rem;
+    padding: 0.65rem 0.85rem;
   }
   .section-bar h2 {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
   .section-block {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
+    width: 100%;
   }
   .section-block-body,
   .section-block > div:not(.section-bar) {
-    padding: 0.5rem !important;
+    padding: 0.4rem !important;
+    width: 100%;
   }
 
   /* In-table form inputs touch friendly */
   .row-input,
   .less-dropdown,
   .add-btn {
-    font-size: 16px !important; /* Prevents auto-zoom on iOS/Android */
+    font-size: 16px !important; /* Prevents auto-zoom on mobile */
   }
   .row-input {
     min-height: 38px;
@@ -1447,7 +1508,7 @@ tr.warning-row .balance-input {
   .modal-box {
     width: 95vw !important;
     max-height: 90vh !important;
-    padding: 1.25rem !important;
+    padding: 1.15rem !important;
   }
 }
 
@@ -1458,19 +1519,20 @@ tr.warning-row .balance-input {
   }
   .account-hero-metrics {
     grid-template-columns: 1fr;
-    gap: 0.5rem;
+    gap: 0.4rem;
   }
   .hero-metric-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.65rem 0.85rem;
+    padding: 0.6rem 0.75rem;
     text-align: left;
   }
   .hero-metric-item .metric-label {
+    font-size: 0.72rem;
     margin-bottom: 0;
   }
   .hero-metric-item .metric-val {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
 }
