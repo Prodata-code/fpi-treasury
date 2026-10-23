@@ -91,6 +91,12 @@ const lessItems2859 = ["Transfer to 564212106476","SSC (VENDOR)","FGVC","GAJI","
 const lessItems6476 = ["Transfer to 564098512859","SSC (VENDOR)","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","FPX"];
 const addItems2859 = ["Receive from 564212106476", "Receive from FGVC (IFP fund)", "PUMP BACK"];
 const addItems6476 = ["Receive from 564098512859", "Receive from FGVC (IFP fund)", "PUMP BACK"];
+const defaultInvest = [
+  { inst: "KAF", date: "2024-02-11", maturity: "", rate: "3.02", from: "Sukuk+tolling", bal: "", amt: "0" },
+  { inst: "MBB", date: "", maturity: "", rate: "", from: "", bal: "", amt: "0" },
+  { inst: "MBSB (Long-Term)", date: "", maturity: "", rate: "3.60", from: "Tolling", bal: "15,000,000.00", amt: "15,000,000.00" }
+];
+
 const outgoingDefaultCategories = ["GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LHDN BONUS","KWSP BONUS","KWSP BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","KWSP CA & ADV BON","LHDN CA & ADV BON","Yayasan","PETRONAS","Tax Sarawak","Cess Sabah","MPOB","HR"];
 
 // ================= GLOBAL STATE =================
