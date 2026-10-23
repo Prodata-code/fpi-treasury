@@ -1,6 +1,6 @@
 /**
  * FGV Palm Industries Sdn. Bhd.
- * Treasury Management Unified Portal (Month-End Balance + Daily Cashflow)
+ * Treasury Management Unified Portal (Daily Cashflow + Month-End Balance)
  * Powered by Turso SQLite (Direct HTTP Pipeline & Netlify Serverless)
  */
 
@@ -87,43 +87,64 @@ const DEFAULT_PROJECTS = [
 ];
 
 // Daily Cashflow Categories
-const lessItems2859 = ["Transfer to 564212106476","SSC (VENDOR)","FGVC","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","Prodata","MPOB","CJN SABAH","ETIQA/Insurans","CA & ADV Bonus","KWSP CA & ADV BON","LHDN CA & ADV BON","Bayaran SD","Bayaran SD PBH","Pembayaran Praktikal","CAPEX","Yayasan","SST","Petronas","Cess Sabah","WIP","Cukai Tanah","PM Care","Interco FGV Transport","Tax 5th YA2026","FPX","HR-Loan Rumah"];
+const lessItems2859 = ["Transfer to 564212106476","SSC (VENDOR)","FGVC","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","Prodata","MPOB","CJN SABAH","ETIQA/Insurans","CA & ADV Bonus","KWSP CA & ADV BON","LHDN CA & ADV BON","Bayaran SD","Bayaran SD PBH","Pembayaran Praktikal","Yayasan","SST","Petronas","Cess Sabah","WIP","Cukai Tanah","PM Care","Interco FGV Transport","Tax 5th YA2026","FPX","HR-Loan Rumah"];
 const lessItems6476 = ["Transfer to 564098512859","SSC (VENDOR)","GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","KWSP BONUS","LHDN BONUS","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","HR","STAFF","CAPEX","Interco","FPX"];
 const addItems2859 = ["Receive from 564212106476", "Receive from FGVC (IFP fund)", "PUMP BACK"];
 const addItems6476 = ["Receive from 564098512859", "Receive from FGVC (IFP fund)", "PUMP BACK"];
 const outgoingDefaultCategories = ["GAJI","KWSP","SOCSO","SOCSO EIS","LHDN","Bayaran Praktikal","BONUS","GAJI PBH","KWSP PBH","SOCSO PBH","SOCSO EIS PBH","LHDN PBH","BONUS PBH","LHDN BONUS","KWSP BONUS","KWSP BONUS PBH","LOAN MBB & OTHERS","TABUNG HAJI","ASB","ZAKAT","KWSP CA & ADV BON","LHDN CA & ADV BON","Yayasan","PETRONAS","Tax Sarawak","Cess Sabah","MPOB","HR"];
 
-// State Variables
-let currentPortalModule = 'month-end';
-let currentDailyTab = 1;
-let projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
-let hasUnsavedChanges = false;
+// ================= GLOBAL STATE =================
+
+let projectsData = [];
+let currentPortalModule = 'daily-cashflow'; // Default to Tab 1 (Daily Cashflow)
+let dailyAutoSaveTimer = null;
+let monthEndAutoSaveTimer = null;
 let isRestoringDaily = false;
+let hasUnsavedChanges = false;
 
-// ================= UTILITIES =================
+// ================= GENERAL HELPERS =================
 
-function fmt(val) {
-  const num = Number(val) || 0;
-  return num.toLocaleString('en-MY', {
+function fmt(num) {
+  const n = parseFloat(num) || 0;
+  return n.toLocaleString('en-MY', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 }
 
-function parseVal(v) {
-  return parseFloat(String(v).replace(/,/g, '')) || 0;
+function parseVal(val) {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/,/g, '').trim();
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
 }
 
-function calcReversal(b) {
-  if (b <= 10000) return 0;
-  return Math.ceil((b - 10000) / 1000) * 1000;
+function parseDate(s) {
+  if (!s) return null;
+  if (s.includes('-')) {
+    const p = s.split('-');
+    if (p.length === 3) return new Date(+p[0], +p[1] - 1, +p[2]);
+  } else if (s.includes('/')) {
+    const p = s.split('/');
+    if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function calcReversal(balance) {
+  const bal = Number(balance) || 0;
+  if (bal <= 10000) return 0;
+  return Math.ceil((bal - 10000) / 1000) * 1000;
 }
 
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toast-message');
+  if (!toast || !toastMsg) return;
   toastMsg.textContent = message;
-  toast.className = `toast ${type} show`;
+  toast.className = 'toast ' + type + ' show';
   setTimeout(() => { toast.className = 'toast'; }, 4000);
 }
 
@@ -202,6 +223,7 @@ function unlockPortal() {
     dailyDateInput.value = todayStr;
   }
   
+  switchPortalModule('daily-cashflow'); // Default to Tab 1 (Daily Cashflow)
   buildDailyTables();
   fetchBalances();
   fetchDailyCashflowFromTurso();
@@ -241,134 +263,164 @@ function checkExistingAuth() {
 
 function switchPortalModule(mod) {
   currentPortalModule = mod;
-  const isMonthEnd = mod === 'month-end';
+  const isDaily = mod === 'daily-cashflow';
 
-  document.getElementById('module-month-end').style.display = isMonthEnd ? 'block' : 'none';
-  document.getElementById('module-daily-cashflow').style.display = isMonthEnd ? 'none' : 'block';
+  const dailySec = document.getElementById('module-daily-cashflow');
+  const monthSec = document.getElementById('module-month-end');
+  if (dailySec) dailySec.style.display = isDaily ? 'block' : 'none';
+  if (monthSec) monthSec.style.display = isDaily ? 'none' : 'block';
 
-  document.getElementById('nav-btn-monthend').className = `portal-nav-tab ${isMonthEnd ? 'active' : ''}`;
-  document.getElementById('nav-btn-daily').className = `portal-nav-tab ${!isMonthEnd ? 'active' : ''}`;
+  const btnDaily = document.getElementById('nav-btn-daily');
+  const btnMonth = document.getElementById('nav-btn-monthend');
+  if (btnDaily) btnDaily.className = 'portal-nav-tab ' + (isDaily ? 'active' : '');
+  if (btnMonth) btnMonth.className = 'portal-nav-tab ' + (!isDaily ? 'active' : '');
 
-  document.getElementById('portal-header-title').textContent = isMonthEnd 
-    ? 'Project Month-End Balance Dashboard' 
-    : 'Daily Cash Status & Treasury Operations';
+  const titleEl = document.getElementById('portal-header-title');
+  if (titleEl) {
+    titleEl.textContent = isDaily 
+      ? 'Daily Cash Status & Treasury Operations'
+      : 'Project Month-End Balance Dashboard';
+  }
 }
 
 // ================= MODULE 1: MONTH-END BALANCE LOGIC =================
 
+function getSelectedPeriod() {
+  const m = document.getElementById('period-month')?.value || '06';
+  const y = document.getElementById('period-year')?.value || '2026';
+  const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+  const dayStr = String(lastDay).padStart(2, '0');
+  return y + '-' + m + '-' + dayStr;
+}
+
+function getPeriodPrefix() {
+  const m = document.getElementById('period-month')?.value || '06';
+  const y = document.getElementById('period-year')?.value || '2026';
+  return y + '-' + m;
+}
+
+function getPeriodDisplayLabel() {
+  const mNames = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai", "Ogos", "September", "Oktober", "November", "Disember"];
+  const m = document.getElementById('period-month')?.value || '06';
+  const y = document.getElementById('period-year')?.value || '2026';
+  const mIdx = Math.max(0, Math.min(11, parseInt(m, 10) - 1));
+  return mNames[mIdx] + ' ' + y;
+}
+
+function updatePeriodDisplay(period) {
+  const label = getPeriodDisplayLabel();
+  const el = document.getElementById('period-display-text');
+  if (el) el.textContent = 'Bulan ' + label + ' — FGV Palm Industries Sdn. Bhd.';
+  const printEl = document.getElementById('print-period-text');
+  if (printEl) printEl.textContent = 'Reporting Month: ' + label + ' (As at ' + period + ')';
+}
+
+function changePeriod() {
+  const period = getSelectedPeriod();
+  const pickerEl = document.getElementById('period-picker');
+  if (pickerEl) pickerEl.value = period;
+  fetchBalances();
+}
+
 async function fetchBalances() {
-  const period = document.getElementById('period-picker').value || '2026-06-30';
+  const period = getSelectedPeriod();
+  const periodPrefix = getPeriodPrefix();
   updatePeriodDisplay(period);
 
-  const tursoBadge = document.getElementById('turso-status');
   const tursoDot = document.getElementById('turso-dot');
   const tursoText = document.getElementById('turso-text');
 
-  // Try 1: Netlify serverless
-  try {
-    const token = sessionStorage.getItem('fpi_treasury_token');
-    const res = await fetch(`/api/balances?period=${period}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const result = await res.json();
-      if (result.success && Array.isArray(result.data)) {
-        projectsData = result.data;
-        tursoDot.className = 'status-dot';
-        tursoText.textContent = 'Netlify (Database Live)';
-        renderTable();
-        return;
-      }
-    }
-  } catch (_) {}
-
-  // Try 2: Direct Turso pipeline (GitHub Pages Mode)
+  // Direct Turso pipeline
   try {
     const query = `
-      SELECT p.bil, p.projek, p.hse, p.acc, p.gl, p.ba, COALESCE(b.balance, p.default_balance) AS balance
+      SELECT p.bil, p.projek, p.hse, p.acc, p.gl, p.ba, b.balance
       FROM projects p
-      LEFT JOIN balances b ON p.ba = b.ba AND b.period = ?
+      LEFT JOIN balances b ON p.ba = b.ba AND (b.period = ? OR b.period LIKE ?)
       ORDER BY p.bil ASC;
     `;
     const res = await fetch(TURSO_CONFIG.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         requests: [
-          { type: 'execute', stmt: { sql: query, args: [{ type: 'text', value: period }] } },
+          {
+            type: 'execute',
+            stmt: {
+              sql: query,
+              args: [
+                { type: 'text', value: period },
+                { type: 'text', value: periodPrefix + '%' }
+              ]
+            }
+          },
           { type: 'close' }
         ]
       })
     });
+
     if (res.ok) {
       const json = await res.json();
       const rows = json.results?.[0]?.response?.result?.rows;
       if (Array.isArray(rows) && rows.length > 0) {
-        projectsData = rows.map(r => ({
-          bil: Number(r[0].value),
-          projek: String(r[1].value),
-          hse: String(r[2].value || ''),
-          acc: String(r[3].value || ''),
-          gl: String(r[4].value || ''),
-          ba: String(r[5].value),
-          balance: Number(r[6].value)
-        }));
-        tursoDot.className = 'status-dot test';
-        tursoText.textContent = 'GitHub Pages (Database Live)';
+        let hasCustomBalance = false;
+        projectsData = rows.map(r => {
+          const val = r[6].value;
+          if (val !== null && val !== undefined) hasCustomBalance = true;
+          return {
+            bil: Number(r[0].value),
+            projek: String(r[1].value),
+            hse: String(r[2].value || ''),
+            acc: String(r[3].value || ''),
+            gl: String(r[4].value || ''),
+            ba: String(r[5].value),
+            balance: val !== null && val !== undefined ? Number(val) : 0
+          };
+        });
+
+        if (tursoDot) tursoDot.className = 'status-dot';
+        if (tursoText) {
+          tursoText.textContent = hasCustomBalance 
+            ? 'Turso Database (Rekod Sedia Ada)' 
+            : 'Turso Database (Bulan Baharu - Sedia Dimasukkan)';
+        }
         renderTable();
         return;
       }
     }
   } catch (err) {
-    console.warn(err);
+    console.warn('Turso query error:', err);
   }
 
-  // Fallback
+  // Fallback to default
   projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
-  tursoDot.className = 'status-dot offline';
-  tursoText.textContent = 'Local Cache Mode';
+  if (tursoDot) tursoDot.className = 'status-dot offline';
+  if (tursoText) tursoText.textContent = 'Default Template';
   renderTable();
 }
 
-// ================= AUTO-SAVE TIMERS & HELPERS =================
-let monthEndAutoSaveTimer = null;
-let dailyAutoSaveTimer = null;
-
 function triggerMonthEndAutoSave(delayMs = 1200) {
+  clearTimeout(monthEndAutoSaveTimer);
   const saveBtn = document.getElementById('save-btn');
   if (saveBtn) {
-    saveBtn.textContent = '⏳ Saving to Database in 1s...';
+    saveBtn.textContent = '⏳ Menyimpan ke Database dalam 1s...';
     saveBtn.style.backgroundColor = '#f59e0b';
   }
-  clearTimeout(monthEndAutoSaveTimer);
   monthEndAutoSaveTimer = setTimeout(async () => {
     await saveToTurso(true);
   }, delayMs);
 }
 
-function triggerDailyAutoSave(delayMs = 1200) {
-  if (isRestoringDaily) return;
-  const saveBtn = document.getElementById('daily-save-btn');
-  if (saveBtn) {
-    saveBtn.textContent = '⏳ Saving to Database in 1s...';
-    saveBtn.style.backgroundColor = '#f59e0b';
-  }
-  clearTimeout(dailyAutoSaveTimer);
-  dailyAutoSaveTimer = setTimeout(async () => {
-    await saveDailyCashflowToTurso(true);
-  }, delayMs);
-}
-
 async function saveToTurso(isAutoSave = false) {
   clearTimeout(monthEndAutoSaveTimer);
-  const period = document.getElementById('period-picker').value || '2026-06-30';
+  const period = getSelectedPeriod();
+  const periodPrefix = getPeriodPrefix();
   const saveBtn = document.getElementById('save-btn');
   if (saveBtn) {
     saveBtn.disabled = true;
-    saveBtn.textContent = isAutoSave ? '🔄 Auto-saving to Database...' : 'Saving to Database...';
+    saveBtn.textContent = isAutoSave ? '⏳ Auto-saving ke Turso...' : 'Menyimpan ke Database...';
     saveBtn.style.backgroundColor = isAutoSave ? '#2563eb' : '';
   }
 
@@ -378,27 +430,81 @@ async function saveToTurso(isAutoSave = false) {
   }));
 
   try {
-    const requests = items.map(item => ({
-      type: 'execute',
-      stmt: {
-        sql: `INSERT INTO balances (period, ba, balance, updated_at) 
-              VALUES (?, ?, ?, datetime('now'))
-              ON CONFLICT(period, ba) DO UPDATE SET
-                balance = excluded.balance,
-                updated_at = excluded.updated_at;`,
-        args: [
-          { type: 'text', value: period },
-          { type: 'text', value: String(item.ba) },
-          { type: 'float', value: Number(item.balance) || 0 }
+    // 1. Check if records already exist for this month
+    const checkRes = await fetch(TURSO_CONFIG.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: 'SELECT COUNT(*) as count FROM balances WHERE period = ? OR period LIKE ?;',
+              args: [
+                { type: 'text', value: period },
+                { type: 'text', value: periodPrefix + '%' }
+              ]
+            }
+          },
+          { type: 'close' }
         ]
-      }
-    }));
+      })
+    });
+
+    let isUpdate = false;
+    if (checkRes.ok) {
+      const checkJson = await checkRes.json();
+      const count = Number(checkJson.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value || 0);
+      if (count > 0) isUpdate = true;
+    }
+
+    const requests = [];
+
+    // 2. If updating an existing month, archive the old records to balances_history
+    if (isUpdate) {
+      requests.push({
+        type: 'execute',
+        stmt: {
+          sql: `INSERT INTO balances_history (period, ba, balance, archived_at)
+                SELECT period, ba, balance, datetime('now')
+                FROM balances
+                WHERE period = ? OR period LIKE ?;`,
+          args: [
+            { type: 'text', value: period },
+            { type: 'text', value: periodPrefix + '%' }
+          ]
+        }
+      });
+    }
+
+    // 3. Upsert current items into balances
+    items.forEach(item => {
+      requests.push({
+        type: 'execute',
+        stmt: {
+          sql: `INSERT INTO balances (period, ba, balance, updated_at) 
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(period, ba) DO UPDATE SET
+                  balance = excluded.balance,
+                  updated_at = excluded.updated_at;`,
+          args: [
+            { type: 'text', value: period },
+            { type: 'text', value: String(item.ba) },
+            { type: 'float', value: Number(item.balance) || 0 }
+          ]
+        }
+      });
+    });
+
     requests.push({ type: 'close' });
 
     const res = await fetch(TURSO_CONFIG.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ requests })
@@ -406,12 +512,16 @@ async function saveToTurso(isAutoSave = false) {
 
     if (res.ok) {
       hasUnsavedChanges = false;
+      const nowTime = new Date().toLocaleTimeString('en-GB');
       if (saveBtn) {
-        saveBtn.textContent = isAutoSave ? '✅ Saved to Database' : 'Saved to Database!';
+        saveBtn.textContent = isAutoSave ? '✅ Disimpan (' + nowTime + ')' : '✅ Berjaya Disimpan!';
         saveBtn.style.backgroundColor = '#059669';
       }
       if (!isAutoSave) {
-        showToast('All 71 project balances successfully saved to database!');
+        const msg = isUpdate 
+          ? `Kemas kini bagi ${getPeriodDisplayLabel()} disimpan! Rekod lama telah diarkibkan ke Sejarah (History).`
+          : `Senarai baru bagi ${getPeriodDisplayLabel()} berjaya dimasukkan ke database!`;
+        showToast(msg);
       }
       setTimeout(() => {
         if (saveBtn) {
@@ -424,7 +534,7 @@ async function saveToTurso(isAutoSave = false) {
     }
   } catch (err) {
     if (!isAutoSave) {
-      showToast('Failed to save to database: ' + err.message, 'error');
+      showToast('Gagal simpan ke database: ' + err.message, 'error');
     }
   }
 
@@ -435,23 +545,141 @@ async function saveToTurso(isAutoSave = false) {
   }
 }
 
-function updatePeriodDisplay(dateStr) {
-  document.getElementById('period-display-text').textContent = 'FGV Palm Industries Sdn. Bhd.';
-  document.getElementById('print-period-text').textContent = 'FGV Palm Industries Sdn. Bhd.';
+// ================= VERSION HISTORY VIEWER =================
+
+async function openHistoryModal() {
+  const modal = document.getElementById('history-modal');
+  const desc = document.getElementById('history-modal-desc');
+  const loading = document.getElementById('history-loading');
+  const container = document.getElementById('history-list-container');
+  const tbody = document.getElementById('history-table-body');
+
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  desc.textContent = 'Senarai rekod sejarah (history) yang disimpan sebelum ini bagi ' + getPeriodDisplayLabel() + '.';
+  loading.style.display = 'block';
+  container.style.display = 'none';
+  tbody.innerHTML = '';
+
+  const period = getSelectedPeriod();
+  const periodPrefix = getPeriodPrefix();
+
+  try {
+    const res = await fetch(TURSO_CONFIG.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: 'SELECT archived_at, COUNT(*) as count FROM balances_history WHERE period = ? OR period LIKE ? GROUP BY archived_at ORDER BY archived_at DESC;',
+              args: [
+                { type: 'text', value: period },
+                { type: 'text', value: periodPrefix + '%' }
+              ]
+            }
+          },
+          { type: 'close' }
+        ]
+      })
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const rows = json.results?.[0]?.response?.result?.rows || [];
+      loading.style.display = 'none';
+      container.style.display = 'block';
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--gray-500);padding:1.5rem;">Tiada sejarah kemas kini untuk bulan ini (ini adalah senarai aktif/pertama).</td></tr>';
+      } else {
+        rows.forEach(r => {
+          const timestamp = r[0].value;
+          const count = r[1].value;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td style="font-weight:600;color:var(--gray-800);padding:8px 12px;">${timestamp}</td>
+            <td style="text-align:right;padding:8px 12px;">${count} projek</td>
+            <td style="text-align:center;padding:8px 12px;">
+              <button class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:0.75rem;border-color:#4f46e5;color:#4f46e5;" onclick="restoreHistoricalSnapshot('${timestamp}')">Pulihkan</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+  } catch (err) {
+    loading.textContent = 'Gagal memuatkan rekod sejarah: ' + err.message;
+  }
 }
 
-function changePeriod() {
-  clearTimeout(monthEndAutoSaveTimer);
-  const period = document.getElementById('period-picker').value;
-  updatePeriodDisplay(period);
-  fetchBalances();
+function closeHistoryModal() {
+  const modal = document.getElementById('history-modal');
+  if (modal) modal.classList.add('hidden');
 }
+
+async function restoreHistoricalSnapshot(archivedAt) {
+  if (!confirm(`Adakah anda pasti mahu memulihkan rekod dari sejarah ${archivedAt}?`)) return;
+  const period = getSelectedPeriod();
+  const periodPrefix = getPeriodPrefix();
+
+  try {
+    const res = await fetch(TURSO_CONFIG.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: 'SELECT ba, balance FROM balances_history WHERE (period = ? OR period LIKE ?) AND archived_at = ?;',
+              args: [
+                { type: 'text', value: period },
+                { type: 'text', value: periodPrefix + '%' },
+                { type: 'text', value: archivedAt }
+              ]
+            }
+          },
+          { type: 'close' }
+        ]
+      })
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const rows = json.results?.[0]?.response?.result?.rows || [];
+      const map = {};
+      rows.forEach(r => { map[r[0].value] = Number(r[1].value); });
+
+      projectsData.forEach(p => {
+        if (map[p.ba] !== undefined) {
+          p.balance = map[p.ba];
+        }
+      });
+      renderTable();
+      closeHistoryModal();
+      showToast(`Sejarah ${archivedAt} dipulihkan! Sila klik Simpan untuk mengekalkannya.`);
+    }
+  } catch (err) {
+    showToast('Gagal memulihkan sejarah: ' + err.message, 'error');
+  }
+}
+
+// ================= RENDER MONTH-END TABLE =================
 
 function renderTable() {
   const tbody = document.getElementById('table-body');
-  const search = (document.getElementById('search-input').value || '').trim().toLowerCase();
+  if (!tbody) return;
+  const search = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
 
-  const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba) || Infinity) - (parseInt(b.ba) || Infinity));
+  const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba, 10) || Infinity) - (parseInt(b.ba, 10) || Infinity));
 
   tbody.innerHTML = '';
   let totalBal = 0, totalRev = 0, totalFin = 0, warnCount = 0;
@@ -503,20 +731,26 @@ function renderTable() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById('kpi-total-balance').textContent = 'RM ' + fmt(totalBal);
-  document.getElementById('kpi-total-reversal').textContent = 'RM ' + fmt(totalRev);
-  document.getElementById('kpi-total-final').textContent = 'RM ' + fmt(totalFin);
-  document.getElementById('kpi-threshold-count').textContent = `${warnCount} / ${projectsData.length}`;
+  const kpiBal = document.getElementById('kpi-total-balance');
+  const kpiRev = document.getElementById('kpi-total-reversal');
+  const kpiFin = document.getElementById('kpi-total-final');
+  const kpiCnt = document.getElementById('kpi-threshold-count');
+  if (kpiBal) kpiBal.textContent = 'RM ' + fmt(totalBal);
+  if (kpiRev) kpiRev.textContent = 'RM ' + fmt(totalRev);
+  if (kpiFin) kpiFin.textContent = 'RM ' + fmt(totalFin);
+  if (kpiCnt) kpiCnt.textContent = warnCount + ' / ' + projectsData.length;
 
-  document.getElementById('footer-total-balance').textContent = 'RM ' + fmt(totalBal);
-  document.getElementById('footer-total-reversal').textContent = 'RM ' + fmt(totalRev);
-  document.getElementById('footer-total-final').textContent = 'RM ' + fmt(totalFin);
+  const fBal = document.getElementById('footer-total-balance');
+  const fRev = document.getElementById('footer-total-reversal');
+  const fFin = document.getElementById('footer-total-final');
+  if (fBal) fBal.textContent = 'RM ' + fmt(totalBal);
+  if (fRev) fRev.textContent = 'RM ' + fmt(totalRev);
+  if (fFin) fFin.textContent = 'RM ' + fmt(totalFin);
 }
 
 function onBalanceChange(input) {
   const ba = input.dataset.ba;
-  const rawVal = input.value.replace(/,/g, '').trim();
-  const numVal = parseFloat(rawVal) || 0;
+  const numVal = parseVal(input.value);
   const target = projectsData.find(p => p.ba === ba);
   if (target) {
     target.balance = numVal;
@@ -536,7 +770,7 @@ function applyReset() {
   closeResetModal();
   renderTable();
   triggerMonthEndAutoSave(300);
-  showToast('All project balances cleared to 0.');
+  showToast('Semua baki projek dikosongkan kepada 0.');
 }
 
 function applyPaste() {
@@ -572,7 +806,7 @@ function applyPaste() {
     });
     showToast(`Updated ${count} projects by BA code.`);
   } else {
-    const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba) || 0) - (parseInt(b.ba) || 0));
+    const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba, 10) || 0) - (parseInt(b.ba, 10) || 0));
     let count = 0;
     lines.forEach((line, i) => {
       const val = parseFloat(line.replace(/[^0-9.\-]/g, ''));
@@ -581,12 +815,12 @@ function applyPaste() {
         count++;
       }
     });
-    showToast(`Updated ${count} balances sequentially.`);
+    showToast(`Updated ${count} projects sequentially.`);
   }
 
   closePasteModal();
   renderTable();
-  triggerMonthEndAutoSave(300);
+  triggerMonthEndAutoSave(500);
 }
 
 function triggerPrint() { window.print(); }
@@ -594,14 +828,13 @@ function triggerPrint() { window.print(); }
 // ================= MODULE 2: DAILY CASHFLOW LOGIC =================
 
 function switchDailyTab(tabIdx) {
-  currentDailyTab = tabIdx;
-  document.getElementById('daily-page-1').style.display = tabIdx === 1 ? 'block' : 'none';
-  document.getElementById('daily-page-2').style.display = tabIdx === 2 ? 'block' : 'none';
-  document.getElementById('daily-page-3').style.display = tabIdx === 3 ? 'block' : 'none';
-
   [1, 2, 3].forEach(i => {
-    const btn = document.getElementById(`daily-tab-btn-${i}`);
-    if (btn) btn.className = `daily-sub-tab ${tabIdx === i ? 'active' : ''}`;
+    const page = document.getElementById('daily-page-' + i);
+    if (page) page.style.display = tabIdx === i ? 'block' : 'none';
+  });
+  [1, 2, 3].forEach(i => {
+    const btn = document.getElementById('daily-tab-btn-' + i);
+    if (btn) btn.className = 'daily-sub-tab ' + (tabIdx === i ? 'active' : '');
   });
 }
 
@@ -617,17 +850,19 @@ function buildDailyTables() {
     { inst: "MBSB (Long-Term)", date: "", maturity: "", rate: "3.60", from: "Tolling", bal: "15,000,000.00", amt: "15,000,000.00" }
   ];
   ['2859', '6476'].forEach(prefix => {
-    const body = document.getElementById(`invest-body-${prefix}`);
+    const body = document.getElementById('invest-body-' + prefix);
     if (body && body.children.length === 0) {
       defaultInvest.forEach(r => createInvestRow(prefix, r));
     }
   });
+
+  recalcDaily();
 }
 
 function buildAccountTables(prefix, lessList, addList) {
-  const s1 = document.getElementById(`cash-body-${prefix}-s1`);
-  const s2 = document.getElementById(`cash-body-${prefix}-s2`);
-  const s3 = document.getElementById(`cash-body-${prefix}-s3`);
+  const s1 = document.getElementById('cash-body-' + prefix + '-s1');
+  const s2 = document.getElementById('cash-body-' + prefix + '-s2');
+  const s3 = document.getElementById('cash-body-' + prefix + '-s3');
 
   if (!s1 || s1.children.length > 0) return;
 
@@ -635,7 +870,7 @@ function buildAccountTables(prefix, lessList, addList) {
   s1.innerHTML = `
     <tr>
       <td>Bank Statement Balance</td>
-      <td class="text-right"><input type="number" class="row-input ${prefix}-top-input" value="0" step="0.01"></td>
+      <td class="text-right"><input type="number" class="row-input acc-${prefix}-top-input" value="0" step="0.01"></td>
       <td></td>
     </tr>
     <tr>
@@ -704,7 +939,7 @@ function buildAccountTables(prefix, lessList, addList) {
     <tr>
       <td style="padding:6px 10px;"><span>Placement</span></td>
       <td class="text-right" style="padding:6px 10px;">
-        <input type="number" class="row-input ${prefix}-place-input" value="0" step="0.01" style="width:100%;">
+        <input type="number" class="row-input acc-${prefix}-place-input" value="0" step="0.01" style="width:100%;">
       </td>
       <td class="text-center">
         <button class="text-red-500 font-bold" onclick="removePlacementRow(this)">✕</button>
@@ -743,20 +978,20 @@ function buildOutgoingTable() {
 }
 
 function addMaturityFromDropdown(prefix) {
-  const sel = document.getElementById(`${prefix}-maturity-select`);
+  const sel = document.getElementById(prefix + '-maturity-select');
   insertMaturityRow(prefix, sel.value, false);
 }
 function addCustomMaturityItem(prefix) { insertMaturityRow(prefix, '', true); }
 
 function insertMaturityRow(prefix, label, isCustom) {
-  const marker = document.getElementById(`${prefix}-maturity-marker`);
+  const marker = document.getElementById(prefix + '-maturity-marker');
   const tr = document.createElement('tr');
   const nameCell = isCustom 
-    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
-    : `<td style="padding-left:24px">${label}</td>`;
+    ? '<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>'
+    : '<td style="padding-left:24px">' + label + '</td>';
   tr.innerHTML = `
     ${nameCell}
-    <td class="text-right"><input type="number" class="row-input ${prefix}-maturity-input" value="0" step="0.01"></td>
+    <td class="text-right"><input type="number" class="row-input acc-${prefix}-maturity-input" value="0" step="0.01"></td>
     <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
   `;
   marker.parentNode.insertBefore(tr, marker);
@@ -764,22 +999,22 @@ function insertMaturityRow(prefix, label, isCustom) {
 }
 
 function addAddFromDropdown(prefix) {
-  const sel = document.getElementById(`${prefix}-add-select`);
+  const sel = document.getElementById(prefix + '-add-select');
   insertAddRow(prefix, sel.value, false);
 }
 function addCustomAddItem(prefix) { insertAddRow(prefix, '', true); }
 
 function insertAddRow(prefix, label, isCustom) {
-  const marker = document.getElementById(`${prefix}-add-marker`);
+  const marker = document.getElementById(prefix + '-add-marker');
   const tr = document.createElement('tr');
   const nameCell = isCustom 
-    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
-    : `<td style="padding-left:24px">${label}</td>`;
-  
+    ? '<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>'
+    : '<td style="padding-left:24px">' + label + '</td>';
+
   const isTransferSync = (prefix === '2859' && label === 'Receive from 564212106476') || (prefix === '6476' && label === 'Receive from 564098512859');
   const inputCell = isTransferSync 
-    ? `<td class="text-right"><input type="text" class="row-input ${prefix}-add-input" value="0" readonly style="background:#f3f4f6;cursor:not-allowed;" data-sync="transfer"></td>`
-    : `<td class="text-right"><input type="number" class="row-input ${prefix}-add-input" value="0" step="0.01"></td>`;
+    ? `<td class="text-right"><input type="text" class="row-input acc-${prefix}-add-input" value="0" readonly style="background:#f3f4f6;cursor:not-allowed;" data-sync="transfer"></td>`
+    : `<td class="text-right"><input type="number" class="row-input acc-${prefix}-add-input" value="0" step="0.01"></td>`;
 
   tr.innerHTML = `
     ${nameCell}
@@ -791,20 +1026,20 @@ function insertAddRow(prefix, label, isCustom) {
 }
 
 function addLessFromDropdown(prefix) {
-  const sel = document.getElementById(`${prefix}-less-select`);
+  const sel = document.getElementById(prefix + '-less-select');
   insertLessRow(prefix, sel.value, false);
 }
 function addCustomLessItem(prefix) { insertLessRow(prefix, '', true); }
 
 function insertLessRow(prefix, label, isCustom) {
-  const totalRow = document.getElementById(`${prefix}-total-deductions-row`);
+  const totalRow = document.getElementById(prefix + '-total-deductions-row');
   const tr = document.createElement('tr');
   const nameCell = isCustom 
-    ? `<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>` 
-    : `<td style="padding-left:24px">${label}</td>`;
+    ? '<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>'
+    : '<td style="padding-left:24px">' + label + '</td>';
   tr.innerHTML = `
     ${nameCell}
-    <td class="text-right"><input type="number" class="row-input ${prefix}-less-input" value="0" step="0.01"></td>
+    <td class="text-right"><input type="number" class="row-input acc-${prefix}-less-input" value="0" step="0.01"></td>
     <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
   `;
   totalRow.parentNode.insertBefore(tr, totalRow);
@@ -812,11 +1047,11 @@ function insertLessRow(prefix, label, isCustom) {
 }
 
 function addPlacementRow(prefix) {
-  const addBtnRow = document.getElementById(`${prefix}-add-placement-row`);
+  const addBtnRow = document.getElementById(prefix + '-add-placement-row');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td style="padding:6px 10px;"><span>Placement</span></td>
-    <td class="text-right" style="padding:6px 10px;"><input type="number" class="row-input ${prefix}-place-input" value="0" step="0.01" style="width:100%;"></td>
+    <td class="text-right" style="padding:6px 10px;"><input type="number" class="row-input acc-${prefix}-place-input" value="0" step="0.01" style="width:100%;"></td>
     <td class="text-center"><button class="text-red-500 font-bold" onclick="removePlacementRow(this)">✕</button></td>
   `;
   addBtnRow.parentNode.insertBefore(tr, addBtnRow);
@@ -833,7 +1068,7 @@ function addInvestRow(prefix) {
 }
 
 function createInvestRow(prefix, r) {
-  const body = document.getElementById(`invest-body-${prefix}`);
+  const body = document.getElementById('invest-body-' + prefix);
   if (!body) return;
   const idx = body.children.length;
   const tr = document.createElement('tr');
@@ -862,9 +1097,9 @@ function calcSingleInvest(prefix, idx) {
 
   let day = 0, profit = 0;
   if (d1Str && d2Str) {
-    const d1 = new Date(d1Str);
-    const d2 = new Date(d2Str);
-    if (!isNaN(d1) && !isNaN(d2)) {
+    const d1 = parseDate(d1Str);
+    const d2 = parseDate(d2Str);
+    if (d1 && d2) {
       day = Math.floor((d2 - d1) / 864e5);
     }
   }
@@ -897,10 +1132,84 @@ function getRowLabel(row) {
   return inp ? inp.value.trim() : td.textContent.trim();
 }
 
+// Cross-account transfer sync (MBB 2859 <-> MBB 6476)
+function syncAddItemsAcrossTabs() {
+  let transferTo6476Input = null;
+  let receiveFrom2859Input = null;
+  let transferTo2859Input = null;
+  let receiveFrom6476Input = null;
+
+  // 2859 Deductions
+  document.querySelectorAll('#cash-body-2859-s2 tr').forEach(row => {
+    const label = getRowLabel(row);
+    const input = row.querySelector('.acc-2859-less-input');
+    if (label === 'Transfer to 564212106476' && input) transferTo6476Input = input;
+  });
+
+  // 6476 Additions
+  document.querySelectorAll('#cash-body-6476-s1 tr').forEach(row => {
+    const label = getRowLabel(row);
+    const input = row.querySelector('.acc-6476-add-input');
+    if (label === 'Receive from 564098512859' && input) receiveFrom2859Input = input;
+  });
+
+  // 6476 Deductions
+  document.querySelectorAll('#cash-body-6476-s2 tr').forEach(row => {
+    const label = getRowLabel(row);
+    const input = row.querySelector('.acc-6476-less-input');
+    if (label === 'Transfer to 564098512859' && input) transferTo2859Input = input;
+  });
+
+  // 2859 Additions
+  document.querySelectorAll('#cash-body-2859-s1 tr').forEach(row => {
+    const label = getRowLabel(row);
+    const input = row.querySelector('.acc-2859-add-input');
+    if (label === 'Receive from 564212106476' && input) receiveFrom6476Input = input;
+  });
+
+  if (receiveFrom2859Input) {
+    receiveFrom2859Input.value = transferTo6476Input ? (parseVal(transferTo6476Input.value) || 0) : 0;
+  }
+  if (receiveFrom6476Input) {
+    receiveFrom6476Input.value = transferTo2859Input ? (parseVal(transferTo2859Input.value) || 0) : 0;
+  }
+}
+
+// Outgoing payment sync to MBB 2859 Deductions
+function syncOutgoingToAccount() {
+  const outBody = document.getElementById('outgoing-body');
+  if (!outBody) return;
+  const outMap = new Map();
+  outBody.querySelectorAll('tr').forEach(row => {
+    const label = getRowLabel(row);
+    const input = row.querySelector('.out-input');
+    if (label && input) {
+      outMap.set(label, parseVal(input.value));
+    }
+  });
+
+  document.querySelectorAll('#cash-body-2859-s2 tr').forEach(row => {
+    const label = getRowLabel(row);
+    if (label && outMap.has(label)) {
+      const amountInput = row.querySelector('.acc-2859-less-input');
+      if (amountInput) {
+        const val = outMap.get(label);
+        amountInput.value = val > 0 ? val : 0;
+        amountInput.setAttribute('readonly', 'readonly');
+        amountInput.style.backgroundColor = '#f3f4f6';
+        amountInput.style.cursor = 'not-allowed';
+      }
+    }
+  });
+}
+
 function recalcDaily() {
+  syncOutgoingToAccount();
+  syncAddItemsAcrossTabs();
+
   ['2859', '6476'].forEach(prefix => {
     // Recalc investments
-    const invBody = document.getElementById(`invest-body-${prefix}`);
+    const invBody = document.getElementById('invest-body-' + prefix);
     if (invBody) {
       for (let i = 0; i < invBody.children.length; i++) {
         calcSingleInvest(prefix, i);
@@ -923,34 +1232,37 @@ function recalcDaily() {
 }
 
 function recalcAccountSection(prefix) {
-  const topInp = document.querySelector(`.${prefix}-top-input`);
+  const topInp = document.querySelector('.acc-' + prefix + '-top-input');
   const topBal = parseVal(topInp?.value || 0);
 
-  const matInps = [...document.querySelectorAll(`.${prefix}-maturity-input`)].map(i => parseVal(i.value));
+  const matInps = [...document.querySelectorAll('.acc-' + prefix + '-maturity-input')].map(i => parseVal(i.value));
   const matTot = matInps.reduce((a, b) => a + b, 0);
 
-  const addInps = [...document.querySelectorAll(`.${prefix}-add-input`)].map(i => parseVal(i.value));
+  const addInps = [...document.querySelectorAll('.acc-' + prefix + '-add-input')].map(i => parseVal(i.value));
   const addTot = addInps.reduce((a, b) => a + b, 0);
 
   const avail = topBal + matTot + addTot;
-  const availEl = document.getElementById(`${prefix}-avail-balance`);
+  const availEl = document.getElementById(prefix + '-avail-balance');
   if (availEl) availEl.textContent = fmt(avail);
 
-  const lessInps = [...document.querySelectorAll(`.${prefix}-less-input`)].map(i => parseVal(i.value));
+  const lessInps = [...document.querySelectorAll('.acc-' + prefix + '-less-input')].map(i => parseVal(i.value));
   const deductTot = lessInps.reduce((a, b) => a + b, 0);
-  const deductEl = document.getElementById(`${prefix}-total-deductions`);
+  const deductEl = document.getElementById(prefix + '-total-deductions');
   if (deductEl) deductEl.textContent = fmt(deductTot);
 
   const balPlace = avail - deductTot;
-  const balPlaceEl = document.getElementById(`${prefix}-bal-placement`);
+  const balPlaceEl = document.getElementById(prefix + '-bal-placement');
   if (balPlaceEl) balPlaceEl.textContent = fmt(balPlace);
 
-  const placeInps = [...document.querySelectorAll(`.${prefix}-place-input`)].map(i => parseVal(i.value));
+  const placeInps = [...document.querySelectorAll('.acc-' + prefix + '-place-input')].map(i => parseVal(i.value));
   const placeTot = placeInps.reduce((a, b) => a + b, 0);
 
   const netBal = balPlace - placeTot;
-  const netEl = document.getElementById(`${prefix}-net-balance`);
-  if (netEl) netEl.textContent = fmt(netBal);
+  const netEl = document.getElementById(prefix + '-net-balance');
+  if (netEl) {
+    netEl.textContent = fmt(netBal);
+    netEl.style.color = netBal < 0 ? '#ef4444' : '#059669';
+  }
 }
 
 function checkUpcomingPayments() {
@@ -959,49 +1271,45 @@ function checkUpcomingPayments() {
   const dateStr = document.getElementById('daily-report-date')?.value;
   if (!banner || !list || !dateStr) return;
 
-  const today = new Date(dateStr);
-  if (isNaN(today)) return;
-  today.setHours(0, 0, 0, 0);
+  const curDate = parseDate(dateStr);
+  if (!curDate) return;
 
-  const due = [];
+  const dueItems = [];
   document.querySelectorAll('#outgoing-body tr:not(.section-total)').forEach(tr => {
     const cells = tr.querySelectorAll('td');
     if (cells.length >= 3) {
       const label = getRowLabel(tr);
       const amt = parseVal(cells[1].querySelector('input')?.value || 0);
-      const pDateStr = cells[2].querySelector('input')?.value;
-      if (pDateStr && amt > 0) {
-        const pDate = new Date(pDateStr);
-        pDate.setHours(0, 0, 0, 0);
-        // Remind 1 to 3 days in advance (handling weekend)
-        const diffDays = Math.round((pDate - today) / 864e5);
-        if (diffDays >= 0 && diffDays <= 3) {
-          due.push({ label, amt, pDateStr });
+      const dueStr = cells[2].querySelector('input')?.value;
+      if (amt > 0 && dueStr) {
+        const dueDate = parseDate(dueStr);
+        if (dueDate) {
+          const diffDays = Math.ceil((dueDate - curDate) / 864e5);
+          if (diffDays >= 0 && diffDays <= 3) {
+            dueItems.push({ label, amt, dueStr, diffDays });
+          }
         }
       }
     }
   });
 
-  if (due.length > 0) {
-    list.innerHTML = '';
-    due.forEach(d => {
-      const li = document.createElement('li');
-      li.className = 'reminder-item';
-      li.innerHTML = `
-        <span><strong>${d.label}</strong>: RM ${fmt(d.amt)} (Due: ${d.pDateStr})</span>
-        <button class="add-btn btn-primary" onclick="reserveOutgoing('${d.label}', ${d.amt})">Reserve Now</button>
-      `;
-      list.appendChild(li);
-    });
-    banner.style.display = 'block';
-  } else {
+  if (dueItems.length === 0) {
     banner.style.display = 'none';
+    return;
   }
+
+  banner.style.display = 'block';
+  list.innerHTML = dueItems.map(item => `
+    <li>
+      <span><strong>${item.label}</strong>: RM ${fmt(item.amt)} (Due in ${item.diffDays} day${item.diffDays === 1 ? '' : 's'} on ${item.dueStr})</span>
+      <button class="add-btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="reserveOutgoing('${item.label}', ${item.amt})">Reserve in Deductions</button>
+    </li>
+  `).join('');
 }
 
 function reserveOutgoing(label, amt) {
   insertLessRow('2859', label, false);
-  const lessInputs = document.querySelectorAll('.2859-less-input');
+  const lessInputs = document.querySelectorAll('.acc-2859-less-input');
   if (lessInputs.length > 0) {
     lessInputs[lessInputs.length - 1].value = amt;
   }
@@ -1009,18 +1317,18 @@ function reserveOutgoing(label, amt) {
   showToast(`Reserved ${label} (RM ${fmt(amt)}) in MBB 2859 deductions.`);
 }
 
-// ================= DAILY CASHFLOW TURSO SYNC =================
+// ================= DAILY CASHFLOW TURSO SYNC (NO LOCALSTORAGE) =================
 
 function serializeDailyState() {
   const report_date = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
   const serializeAcc = (prefix) => {
-    const topBal = parseVal(document.querySelector(`.${prefix}-top-input`)?.value || 0);
-    const maturity = [...document.querySelectorAll(`.${prefix}-maturity-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
-    const add = [...document.querySelectorAll(`.${prefix}-add-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
-    const less = [...document.querySelectorAll(`.${prefix}-less-input`)].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
-    const place = [...document.querySelectorAll(`.${prefix}-place-input`)].map(i => parseVal(i.value));
+    const topBal = parseVal(document.querySelector('.acc-' + prefix + '-top-input')?.value || 0);
+    const maturity = [...document.querySelectorAll('.acc-' + prefix + '-maturity-input')].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const add = [...document.querySelectorAll('.acc-' + prefix + '-add-input')].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const less = [...document.querySelectorAll('.acc-' + prefix + '-less-input')].map(i => ({ label: getRowLabel(i.closest('tr')), val: parseVal(i.value) }));
+    const place = [...document.querySelectorAll('.acc-' + prefix + '-place-input')].map(i => parseVal(i.value));
     const invest = [];
-    document.querySelectorAll(`#invest-body-${prefix} tr`).forEach(tr => {
+    document.querySelectorAll('#invest-body-' + prefix + ' tr').forEach(tr => {
       const inps = tr.querySelectorAll('input');
       if (inps.length >= 7) {
         invest.push({ inst: inps[0].value, date: inps[1].value, maturity: inps[2].value, rate: inps[3].value, from: inps[4].value, bal: inps[5].value, amt: inps[6].value });
@@ -1049,27 +1357,50 @@ function serializeDailyState() {
   };
 }
 
+function triggerDailyAutoSave(delayMs = 1200) {
+  if (isRestoringDaily) return;
+  const saveBtn = document.getElementById('daily-save-btn');
+  if (saveBtn) {
+    saveBtn.textContent = '⏳ Menyimpan ke Database Turso...';
+    saveBtn.style.backgroundColor = '#f59e0b';
+  }
+  clearTimeout(dailyAutoSaveTimer);
+  dailyAutoSaveTimer = setTimeout(async () => {
+    await saveDailyCashflowToTurso(true);
+  }, delayMs);
+}
+
 async function saveDailyCashflowToTurso(isAutoSave = false) {
   clearTimeout(dailyAutoSaveTimer);
   const saveBtn = document.getElementById('daily-save-btn');
   if (saveBtn) {
     saveBtn.disabled = true;
-    saveBtn.textContent = isAutoSave ? '🔄 Auto-saving to Database...' : 'Saving Daily Cashflow...';
+    saveBtn.textContent = isAutoSave ? '⏳ Menyimpan ke Database Turso...' : 'Menyimpan Daily Cashflow...';
     saveBtn.style.backgroundColor = isAutoSave ? '#2563eb' : '';
   }
 
-  const state = serializeDailyState();
+  let state;
+  try {
+    state = serializeDailyState();
+  } catch (err) {
+    console.error('Serialization error:', err);
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save Daily Cashflow to Database';
+      saveBtn.style.backgroundColor = '';
+    }
+    return;
+  }
+
   const dateStr = state.report_date;
   const jsonStr = JSON.stringify(state);
 
-  // Cache locally
-  localStorage.setItem(`fpi_daily_${dateStr}`, jsonStr);
-
+  // NOTE: DIRECT SAVE TO TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
     const res = await fetch(TURSO_CONFIG.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -1094,12 +1425,13 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
     });
 
     if (res.ok) {
+      const nowTime = new Date().toLocaleTimeString('en-GB');
       if (saveBtn) {
-        saveBtn.textContent = isAutoSave ? '✅ Saved to Database' : 'Saved to Database!';
+        saveBtn.textContent = isAutoSave ? '✅ Disimpan ke Database (' + nowTime + ')' : '✅ Berjaya Disimpan (' + nowTime + ')!';
         saveBtn.style.backgroundColor = '#059669';
       }
       if (!isAutoSave) {
-        showToast(`Daily Cashflow for ${dateStr} saved to database!`);
+        showToast('Daily Cashflow bagi ' + dateStr + ' berjaya disimpan ke Database Turso!');
       }
       setTimeout(() => {
         if (saveBtn) {
@@ -1112,7 +1444,7 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
     }
   } catch (err) {
     if (!isAutoSave) {
-      showToast('Failed to save to database: ' + err.message, 'error');
+      showToast('Gagal simpan ke database: ' + err.message, 'error');
     }
   }
 
@@ -1127,11 +1459,12 @@ async function fetchDailyCashflowFromTurso() {
   const dateInput = document.getElementById('daily-report-date');
   const dateStr = dateInput?.value || new Date().toISOString().split('T')[0];
 
+  // DIRECT FETCH FROM TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
     const res = await fetch(TURSO_CONFIG.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${TURSO_CONFIG.token}`,
+        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -1139,7 +1472,7 @@ async function fetchDailyCashflowFromTurso() {
           {
             type: 'execute',
             stmt: {
-              sql: `SELECT data_json FROM daily_cashflow WHERE report_date = ?;`,
+              sql: 'SELECT data_json FROM daily_cashflow WHERE report_date = ?;',
               args: [{ type: 'text', value: dateStr }]
             }
           },
@@ -1156,16 +1489,11 @@ async function fetchDailyCashflowFromTurso() {
         return;
       }
     }
-  } catch (_) {}
-
-  // Local cache fallback
-  const cached = localStorage.getItem(`fpi_daily_${dateStr}`);
-  if (cached) {
-    restoreDailyState(JSON.parse(cached));
-    return;
+  } catch (err) {
+    console.warn('Fetch daily from Turso error:', err);
   }
 
-  // If no record found for this date, reset to clean default tables
+  // If no record found in database for this date, build clean default tables
   buildDailyTables();
 }
 
@@ -1175,46 +1503,44 @@ function restoreDailyState(state) {
   try {
     const restoreAcc = (prefix, accData) => {
       if (!accData) return;
-      const topInp = document.querySelector(`.${prefix}-top-input`);
+      const topInp = document.querySelector('.acc-' + prefix + '-top-input');
       if (topInp) topInp.value = accData.topBal || 0;
 
       // Clear dynamic rows
-      document.querySelectorAll(`.${prefix}-maturity-input`).forEach(i => i.closest('tr').remove());
-      document.querySelectorAll(`.${prefix}-add-input`).forEach(i => i.closest('tr').remove());
-      document.querySelectorAll(`.${prefix}-less-input`).forEach(i => i.closest('tr').remove());
+      document.querySelectorAll('.acc-' + prefix + '-maturity-input').forEach(i => i.closest('tr').remove());
+      document.querySelectorAll('.acc-' + prefix + '-add-input').forEach(i => i.closest('tr').remove());
+      document.querySelectorAll('.acc-' + prefix + '-less-input').forEach(i => i.closest('tr').remove());
 
-      (accData.maturity || []).forEach(m => {
-        insertMaturityRow(prefix, m.label, false);
-        const inps = document.querySelectorAll(`.${prefix}-maturity-input`);
-        inps[inps.length - 1].value = m.val;
-      });
+      if (Array.isArray(accData.maturity)) {
+        accData.maturity.forEach(m => insertMaturityRow(prefix, m.label, false));
+        const inps = document.querySelectorAll('.acc-' + prefix + '-maturity-input');
+        accData.maturity.forEach((m, idx) => { if (inps[idx]) inps[idx].value = m.val || 0; });
+      }
 
-      (accData.add || []).forEach(a => {
-        insertAddRow(prefix, a.label, false);
-        const inps = document.querySelectorAll(`.${prefix}-add-input`);
-        inps[inps.length - 1].value = a.val;
-      });
+      if (Array.isArray(accData.add)) {
+        accData.add.forEach(a => insertAddRow(prefix, a.label, false));
+        const inps = document.querySelectorAll('.acc-' + prefix + '-add-input');
+        accData.add.forEach((a, idx) => { if (inps[idx]) inps[idx].value = a.val || 0; });
+      }
 
-      (accData.less || []).forEach(l => {
-        insertLessRow(prefix, l.label, false);
-        const inps = document.querySelectorAll(`.${prefix}-less-input`);
-        inps[inps.length - 1].value = l.val;
-      });
+      if (Array.isArray(accData.less)) {
+        accData.less.forEach(l => insertLessRow(prefix, l.label, false));
+        const inps = document.querySelectorAll('.acc-' + prefix + '-less-input');
+        accData.less.forEach((l, idx) => { if (inps[idx]) inps[idx].value = l.val || 0; });
+      }
 
-      const placeInps = document.querySelectorAll(`.${prefix}-place-input`);
-      (accData.place || [0]).forEach((val, idx) => {
-        if (idx === 0 && placeInps[0]) {
-          placeInps[0].value = val;
-        } else if (idx > 0) {
+      const placeInps = document.querySelectorAll('.acc-' + prefix + '-place-input');
+      if (Array.isArray(accData.place)) {
+        while (document.querySelectorAll('.acc-' + prefix + '-place-input').length < accData.place.length) {
           addPlacementRow(prefix);
-          const currentPlaces = document.querySelectorAll(`.${prefix}-place-input`);
-          currentPlaces[currentPlaces.length - 1].value = val;
         }
-      });
+        const currentPlaces = document.querySelectorAll('.acc-' + prefix + '-place-input');
+        accData.place.forEach((val, idx) => { if (currentPlaces[idx]) currentPlaces[idx].value = val || 0; });
+      }
 
-      const invBody = document.getElementById(`invest-body-${prefix}`);
-      if (invBody && Array.isArray(accData.invest) && accData.invest.length > 0) {
-        invBody.innerHTML = '';
+      if (Array.isArray(accData.invest) && accData.invest.length > 0) {
+        const invBody = document.getElementById('invest-body-' + prefix);
+        if (invBody) invBody.innerHTML = '';
         accData.invest.forEach(r => createInvestRow(prefix, r));
       }
     };
@@ -1226,12 +1552,12 @@ function restoreDailyState(state) {
       const outBody = document.getElementById('outgoing-body');
       if (outBody) {
         outBody.innerHTML = '';
-        state.outgoing.forEach(row => {
+        state.outgoing.forEach(r => {
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td>${row.label}</td>
-            <td class="text-right"><input type="number" class="row-input out-input" value="${row.amt}" step="0.01"></td>
-            <td class="text-right"><input type="date" class="row-input" value="${row.date}"></td>
+            <td>${r.label}</td>
+            <td class="text-right"><input type="number" class="row-input out-input" value="${r.amt || 0}" step="0.01"></td>
+            <td class="text-right"><input type="date" class="row-input" value="${r.date || ''}"></td>
           `;
           outBody.appendChild(tr);
         });

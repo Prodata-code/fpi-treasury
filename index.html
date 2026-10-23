@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -53,13 +53,14 @@
     </header>
 
     <!-- Unified Navigation Bar -->
+    <!-- Unified Navigation Bar -->
     <nav class="portal-nav">
       <div class="portal-nav-container">
-        <button id="nav-btn-monthend" class="portal-nav-tab active" onclick="switchPortalModule('month-end')">
-          <span>📊</span> Month-End Balance Dashboard (71 Projects)
-        </button>
-        <button id="nav-btn-daily" class="portal-nav-tab" onclick="switchPortalModule('daily-cashflow')">
+        <button id="nav-btn-daily" class="portal-nav-tab active" onclick="switchPortalModule('daily-cashflow')">
           <span>💰</span> Daily Cashflow & Bank Status
+        </button>
+        <button id="nav-btn-monthend" class="portal-nav-tab" onclick="switchPortalModule('month-end')">
+          <span>📊</span> Month-End Balance Dashboard (71 Projects)
         </button>
       </div>
     </nav>
@@ -68,7 +69,7 @@
     <main class="main-content">
       
       <!-- ================= MODULE 1: MONTH-END BALANCE DASHBOARD ================= -->
-      <section id="module-month-end">
+      <section id="module-month-end" style="display: none;">
         <!-- Print Header -->
         <div class="print-header" style="display: none;">
           <h1>Project Month-End Balance Dashboard</h1>
@@ -102,10 +103,33 @@
         <!-- Action Toolbar -->
         <div class="toolbar-card">
           <div class="btn-group">
-            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500;">
-              <span>Period:</span>
-              <input type="date" id="period-picker" class="period-input" value="2026-06-30" onchange="changePeriod()">
+            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 500;">
+              <span>Bulan:</span>
+              <select id="period-month" class="period-input" style="padding: 0.35rem 0.6rem; font-weight: 600;" onchange="changePeriod()">
+                <option value="01">Januari</option>
+                <option value="02">Februari</option>
+                <option value="03">Mac</option>
+                <option value="04">April</option>
+                <option value="05">Mei</option>
+                <option value="06" selected>Jun</option>
+                <option value="07">Julai</option>
+                <option value="08">Ogos</option>
+                <option value="09">September</option>
+                <option value="10">Oktober</option>
+                <option value="11">November</option>
+                <option value="12">Disember</option>
+              </select>
+              <span>Tahun:</span>
+              <select id="period-year" class="period-input" style="padding: 0.35rem 0.6rem; font-weight: 600;" onchange="changePeriod()">
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026" selected>2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
+              </select>
+              <input type="hidden" id="period-picker" value="2026-06-30">
             </div>
+            <button class="btn btn-outline" style="border-color:#6366f1;color:#6366f1;font-weight:600;" onclick="openHistoryModal()">📜 History</button>
             <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
             <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Database</button>
             <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
@@ -170,7 +194,7 @@
       </section>
 
       <!-- ================= MODULE 2: DAILY CASHFLOW ================= -->
-      <section id="module-daily-cashflow" style="display: none;">
+      <section id="module-daily-cashflow" style="display: block;">
         
         <!-- Upcoming Payment Reminder Banner -->
         <div id="reminder-banner" class="reminder-banner" style="display: none;">
@@ -405,6 +429,33 @@
     </div>
   </div>
 
+    <!-- ================= VERSION HISTORY MODAL ================= -->
+  <div id="history-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 640px;">
+      <h3 class="modal-title">📜 Sejarah Kemas Kini (Month-End History)</h3>
+      <p class="modal-desc" id="history-modal-desc">
+        Senarai arkib kemas kini untuk bulan yang dipilih.
+      </p>
+      <div id="history-loading" style="text-align: center; padding: 1.5rem; color: var(--gray-500);">
+        Memuatkan sejarah rekod dari Turso...
+      </div>
+      <div id="history-list-container" style="max-height: 320px; overflow-y: auto; display: none;">
+        <table class="report-table" style="width: 100%; font-size: 0.85rem;">
+          <thead>
+            <tr>
+              <th style="text-align: left;">Tarikh & Masa Simpanan</th>
+              <th style="text-align: right;">Bil. Rekod Projek</th>
+              <th style="text-align: center;">Tindakan</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="margin-top: 1.25rem;">
+        <button class="btn btn-outline" onclick="closeHistoryModal()">Tutup</button>
+      </div>
+    </div>
+  </div>
   <!-- ================= TOAST NOTIFICATION ================= -->
   <div id="toast" class="toast">
     <span id="toast-message">Notification message</span>

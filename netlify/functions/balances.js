@@ -1,4 +1,4 @@
-import { createClient } from '@libsql/client';
+﻿import { createClient } from '@libsql/client';
 import { DEFAULT_PROJECTS } from './defaultProjects.js';
 
 let dbInitialized = false;
@@ -39,6 +39,14 @@ async function ensureTables(client) {
       report_date TEXT PRIMARY KEY,
       data_json TEXT NOT NULL,
       updated_at TEXT DEFAULT (datetime('now'))
+    );`,
+    `CREATE TABLE IF NOT EXISTS balances_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      period TEXT NOT NULL,
+      ba TEXT NOT NULL,
+      balance REAL NOT NULL,
+      archived_at TEXT DEFAULT (datetime('now')),
+      version INTEGER DEFAULT 1
     );`
   ]);
 
