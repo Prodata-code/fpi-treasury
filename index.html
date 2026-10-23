@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +6,7 @@
   <title>Treasury Management Portal — FGV Palm Industries</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,20 +14,20 @@
   <!-- ================= PASSWORD LOCK SCREEN ================= -->
   <div id="lock-screen" class="lock-screen">
     <div class="lock-box">
-      <div class="lock-icon-circle">🔒</div>
-      <h2 class="lock-title">Treasury Access Required</h2>
-      <p class="lock-subtitle">FGV Palm Industries Sdn. Bhd.<br>Enter the security password to proceed.</p>
+      <div class="lock-icon-circle">🏛️</div>
+      <h2 class="lock-title">Treasury Portal Access</h2>
+      <p class="lock-subtitle">FGV Palm Industries Sdn. Bhd.<br>Sila masukkan kata laluan keselamatan untuk akses.</p>
       <form id="lock-form" onsubmit="handleLogin(event)">
         <input 
           type="password" 
           id="password-input" 
           class="lock-input" 
-          placeholder="Enter password..." 
+          placeholder="••••••••••••" 
           autocomplete="current-password"
           required
         />
-        <p id="lock-error" class="lock-error">Sorry, that password isn't right. Please check and try again.</p>
-        <button type="submit" id="unlock-btn" class="btn btn-primary btn-block">Unlock Portal</button>
+        <p id="lock-error" class="lock-error">Kata laluan tidak tepat. Sila cuba lagi.</p>
+        <button type="submit" id="unlock-btn" class="btn btn-primary btn-block">Buka Portal Treasury</button>
       </form>
     </div>
   </div>
@@ -38,21 +38,25 @@
     <!-- Top Header -->
     <header class="header">
       <div class="header-container">
-        <div class="header-title-box">
-          <h1 id="portal-header-title">Treasury Management Portal</h1>
-          <p id="period-display-text">FGV Palm Industries Sdn. Bhd.</p>
+        <div class="header-brand-wrap">
+          <div class="header-logo-badge">🏛️</div>
+          <div class="header-title-box">
+            <h1 id="portal-header-title">Daily Cash Status & Treasury Operations</h1>
+            <p id="period-display-text">FGV Palm Industries Sdn. Bhd.</p>
+          </div>
         </div>
         <div class="header-controls">
           <div class="status-badge" id="turso-status" title="Connection Status">
             <span class="status-dot" id="turso-dot"></span>
-            <span id="turso-text">Checking...</span>
+            <span id="turso-text">Turso Database Live</span>
           </div>
-          <button class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;" onclick="handleLogout()">Lock</button>
+          <button class="btn-lock" onclick="handleLogout()" title="Kunci Portal">
+            <span>🔒</span> Kunci
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- Unified Navigation Bar -->
     <!-- Unified Navigation Bar -->
     <nav class="portal-nav">
       <div class="portal-nav-container">
@@ -81,22 +85,22 @@
           <div class="kpi-card">
             <div class="kpi-card-header">Total End Balance</div>
             <div class="kpi-card-value" id="kpi-total-balance">RM 0.00</div>
-            <div class="kpi-subtext">Sum of all 71 active projects</div>
+            <div class="kpi-subtext">Jumlah kesemua 71 projek aktif</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-card-header">Total Auto Reversal</div>
             <div class="kpi-card-value rose" id="kpi-total-reversal">RM 0.00</div>
-            <div class="kpi-subtext">Balances above RM 10,000 threshold</div>
+            <div class="kpi-subtext">Baki melebihi ambang RM 10,000</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-card-header">Final Net Balance</div>
             <div class="kpi-card-value emerald" id="kpi-total-final">RM 0.00</div>
-            <div class="kpi-subtext">After applying all reversals</div>
+            <div class="kpi-subtext">Selepas pelaksanaan auto-reversal</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card-header">Target Compliance</div>
+            <div class="kpi-card-header">Projek Tertakluk Reversal</div>
             <div class="kpi-card-value" id="kpi-threshold-count">0 / 71</div>
-            <div class="kpi-subtext">Projects requiring auto-reversal</div>
+            <div class="kpi-subtext">Projek dengan baki > RM 10,000</div>
           </div>
         </div>
 
@@ -104,7 +108,7 @@
         <div class="toolbar-card">
           <div class="btn-group">
             <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 500;">
-              <span>Bulan:</span>
+              <span class="toolbar-label">Bulan:</span>
               <select id="period-month" class="period-input" style="padding: 0.35rem 0.6rem; font-weight: 600;" onchange="changePeriod()">
                 <option value="01">Januari</option>
                 <option value="02">Februari</option>
@@ -119,7 +123,7 @@
                 <option value="11">November</option>
                 <option value="12">Disember</option>
               </select>
-              <span>Tahun:</span>
+              <span class="toolbar-label">Tahun:</span>
               <select id="period-year" class="period-input" style="padding: 0.35rem 0.6rem; font-weight: 600;" onchange="changePeriod()">
                 <option value="2024">2024</option>
                 <option value="2025">2025</option>
@@ -129,7 +133,7 @@
               </select>
               <input type="hidden" id="period-picker" value="2026-06-30">
             </div>
-            <button class="btn btn-outline" style="border-color:#6366f1;color:#6366f1;font-weight:600;" onclick="openHistoryModal()">📜 History</button>
+            <button class="btn btn-outline" style="border-color:#4f46e5;color:#4f46e5;font-weight:600;" onclick="openHistoryModal()">📜 History</button>
             <button class="btn btn-primary" onclick="openPasteModal()">📋 Paste from SAP</button>
             <button class="btn btn-save" id="save-btn" onclick="saveToTurso()">💾 Save to Database</button>
             <button class="btn btn-danger" onclick="openResetModal()">↺ Reset</button>
@@ -152,32 +156,32 @@
             <thead>
               <tr>
                 <th style="width: 4%;">No.</th>
-                <th style="width: 25%;">Project</th>
-                <th style="width: 8%;">House Bank</th>
-                <th style="width: 14%;">Account Bank</th>
-                <th style="width: 10%;">GL Code</th>
+                <th style="width: 25%;">Project Name</th>
+                <th style="width: 8%;">HSE</th>
+                <th style="width: 14%;">Account No.</th>
+                <th style="width: 10%;">GL Account</th>
                 <th style="width: 7%;">BA</th>
-                <th style="width: 11%;" class="text-right">End Balance (RM)</th>
-                <th style="width: 10%;" class="text-right">Auto Reversal (RM)</th>
-                <th style="width: 11%;" class="text-right">Final Balance (RM)</th>
+                <th style="width: 12%; text-align: right;">End Balance (RM)</th>
+                <th style="width: 10%; text-align: right;">Auto Reversal</th>
+                <th style="width: 10%; text-align: right;">Final Balance</th>
               </tr>
             </thead>
             <tbody id="table-body">
-              <!-- Populated dynamically -->
+              <!-- Dynamically populated rows -->
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="6" class="text-right">TOTAL</td>
-                <td class="text-right" id="footer-total-balance">RM 0.00</td>
-                <td class="text-right rose" id="footer-total-reversal">RM 0.00</td>
-                <td class="text-right emerald" id="footer-total-final">RM 0.00</td>
+                <td colspan="6" style="text-align: right; font-weight: 700;">TOTAL:</td>
+                <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;" id="footer-total-balance">RM 0.00</td>
+                <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--rose);" id="footer-total-reversal">RM 0.00</td>
+                <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--emerald);" id="footer-total-final">RM 0.00</td>
               </tr>
             </tfoot>
           </table>
         </div>
 
-        <!-- Print Signatures for Month-End -->
-        <div class="print-signatures" style="display: none;">
+        <!-- Print Endorsement Boxes -->
+        <div class="signature-grid" style="display: none;">
           <div class="signature-box">
             <p>Prepared by,</p>
             <div class="signature-line"></div>
@@ -198,36 +202,74 @@
         
         <!-- Upcoming Payment Reminder Banner -->
         <div id="reminder-banner" class="reminder-banner" style="display: none;">
-          <div class="reminder-header">⚠️ Upcoming Payment Reminder</div>
-          <div class="reminder-sub">The following payments are due soon and should be reserved under the Deduction section:</div>
+          <div class="reminder-header">⚠️ Peringatan Bayaran Keluar (Due Soon)</div>
+          <div class="reminder-sub">Bayaran berikut akan matang/perlu diselesaikan dalam tempoh terdekat dan perlu diperuntukkan dalam bahagian potongan:</div>
           <ul id="reminder-list" class="reminder-list"></ul>
         </div>
 
         <!-- Daily Cashflow Controls -->
-        <div class="toolbar-card">
-          <div class="btn-group">
-            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--primary);">
-              <span>Daily Cash Status Date:</span>
-              <input type="date" id="daily-report-date" class="period-input" onchange="onDailyDateChange()">
+        <div class="toolbar-card daily-toolbar-card">
+          <div class="daily-toolbar-left">
+            <div class="date-selector-wrapper">
+              <span class="toolbar-label">Tarikh Laporan:</span>
+              <div class="date-nav-group">
+                <button type="button" class="btn-date-nav" onclick="changeDailyDateOffset(-1)" title="Hari Sebelumnya">◀</button>
+                <input type="date" id="daily-report-date" class="modern-date-picker" onchange="onDailyDateChange()">
+                <button type="button" class="btn-date-nav" onclick="changeDailyDateOffset(1)" title="Hari Seterusnya">▶</button>
+                <button type="button" class="btn-date-today" onclick="setDailyDateToday()">Hari Ini</button>
+              </div>
             </div>
-            <button class="btn btn-save" id="daily-save-btn" onclick="saveDailyCashflowToTurso()">💾 Save Daily Cashflow to Database</button>
+            <div id="daily-record-badge" class="record-badge checking">
+              <span class="record-badge-dot"></span>
+              <span id="daily-record-badge-text">Memeriksa database...</span>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-save" id="daily-save-btn" onclick="saveDailyCashflowToTurso()">💾 Save Daily Cashflow</button>
             <button class="btn btn-outline" onclick="exportDailyPDF()">🖨️ Export PDF</button>
           </div>
         </div>
 
         <!-- Daily Cashflow Sub-Tabs -->
         <div class="daily-sub-tabs">
-          <button id="daily-tab-btn-1" class="daily-sub-tab active" onclick="switchDailyTab(1)">MBB 564098-512859</button>
-          <button id="daily-tab-btn-2" class="daily-sub-tab" onclick="switchDailyTab(2)">MBB 564212-106476</button>
-          <button id="daily-tab-btn-3" class="daily-sub-tab" onclick="switchDailyTab(3)">Expected Outgoing Payment</button>
+          <button id="daily-tab-btn-1" class="daily-sub-tab active" onclick="switchDailyTab(1)">
+            MBB 564098-512859 (Main)
+          </button>
+          <button id="daily-tab-btn-2" class="daily-sub-tab" onclick="switchDailyTab(2)">
+            MBB 564212-106476 (Secondary)
+          </button>
+          <button id="daily-tab-btn-3" class="daily-sub-tab" onclick="switchDailyTab(3)">
+            Expected Outgoing Payment
+          </button>
         </div>
 
         <!-- Tab 1: MBB 564098512859 -->
         <div id="daily-page-1">
-          <p class="font-bold text-sm mb-2" style="color: var(--primary);">Account: MBB 564098-512859</p>
+          <!-- Executive Account Hero Ribbon -->
+          <div class="account-hero-card">
+            <div class="account-hero-info">
+              <div class="account-hero-badge">Akaun Operasi Utama</div>
+              <h2 class="account-hero-title">Malayan Banking Berhad</h2>
+              <div class="account-hero-num">No. Akaun: <span>564098-512859</span></div>
+            </div>
+            <div class="account-hero-metrics">
+              <div class="hero-metric-item">
+                <div class="metric-label">Available Balance</div>
+                <div class="metric-val" id="hero-avail-2859">RM 0.00</div>
+              </div>
+              <div class="hero-metric-item">
+                <div class="metric-label">Total Deductions</div>
+                <div class="metric-val text-rose" id="hero-deduct-2859">RM 0.00</div>
+              </div>
+              <div class="hero-metric-item highlight">
+                <div class="metric-label">NET BALANCE</div>
+                <div class="metric-val bold text-emerald" id="hero-net-2859">RM 0.00</div>
+              </div>
+            </div>
+          </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Bank Position</h2></div>
+            <div class="section-bar bar-sky"><h2>1. Kedudukan Bank (Bank Position)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-2859-s1">
                 <thead>
@@ -243,7 +285,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Deductions</h2></div>
+            <div class="section-bar bar-amber"><h2>2. Potongan / Pembayaran (Deductions)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-2859-s2">
                 <thead>
@@ -259,7 +301,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Final Position</h2></div>
+            <div class="section-bar bar-emerald"><h2>3. Kedudukan Akhir & Penempatan (Final Position & Placement)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-2859-s3">
                 <tbody id="cash-body-2859-s3"></tbody>
@@ -268,7 +310,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Investment Placement & Returns</h2></div>
+            <div class="section-bar bar-indigo"><h2>4. Penempatan Pelaburan & Pulangan (Investment Ledger)</h2></div>
             <div style="padding: 0.75rem; overflow-x: auto;">
               <table class="report-table" id="table-invest-2859">
                 <thead>
@@ -296,10 +338,31 @@
 
         <!-- Tab 2: MBB 564212106476 -->
         <div id="daily-page-2" style="display: none;">
-          <p class="font-bold text-sm mb-2" style="color: var(--primary);">Account: MBB 564212-106476</p>
+          <!-- Executive Account Hero Ribbon -->
+          <div class="account-hero-card">
+            <div class="account-hero-info">
+              <div class="account-hero-badge">Akaun Operasi Sekunder</div>
+              <h2 class="account-hero-title">Malayan Banking Berhad</h2>
+              <div class="account-hero-num">No. Akaun: <span>564212-106476</span></div>
+            </div>
+            <div class="account-hero-metrics">
+              <div class="hero-metric-item">
+                <div class="metric-label">Available Balance</div>
+                <div class="metric-val" id="hero-avail-6476">RM 0.00</div>
+              </div>
+              <div class="hero-metric-item">
+                <div class="metric-label">Total Deductions</div>
+                <div class="metric-val text-rose" id="hero-deduct-6476">RM 0.00</div>
+              </div>
+              <div class="hero-metric-item highlight">
+                <div class="metric-label">NET BALANCE</div>
+                <div class="metric-val bold text-emerald" id="hero-net-6476">RM 0.00</div>
+              </div>
+            </div>
+          </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Bank Position</h2></div>
+            <div class="section-bar bar-sky"><h2>1. Kedudukan Bank (Bank Position)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-6476-s1">
                 <thead>
@@ -315,7 +378,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Deductions</h2></div>
+            <div class="section-bar bar-amber"><h2>2. Potongan / Pembayaran (Deductions)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-6476-s2">
                 <thead>
@@ -331,7 +394,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Final Position</h2></div>
+            <div class="section-bar bar-emerald"><h2>3. Kedudukan Akhir & Penempatan (Final Position & Placement)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-6476-s3">
                 <tbody id="cash-body-6476-s3"></tbody>
@@ -340,7 +403,7 @@
           </div>
 
           <div class="section-block">
-            <div class="section-bar"><h2>Investment Placement & Returns</h2></div>
+            <div class="section-bar bar-indigo"><h2>4. Penempatan Pelaburan & Pulangan (Investment Ledger)</h2></div>
             <div style="padding: 0.75rem; overflow-x: auto;">
               <table class="report-table" id="table-invest-6476">
                 <thead>
@@ -369,7 +432,7 @@
         <!-- Tab 3: Expected Outgoing Payment -->
         <div id="daily-page-3" style="display: none;">
           <div class="section-block">
-            <div class="section-bar"><h2>Expected Outgoing Payment Schedule</h2></div>
+            <div class="section-bar bar-indigo"><h2>Jadual Jangkaan Pembayaran Keluar (Expected Outgoing Payments)</h2></div>
             <div style="padding: 0.75rem;">
               <table class="report-table" id="table-outgoing">
                 <thead>
@@ -393,50 +456,14 @@
     </main>
   </div>
 
-  <!-- ================= PASTE FROM SAP MODAL ================= -->
-  <div id="paste-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h3 class="modal-title">Paste Data from SAP</h3>
-      <p class="modal-desc">
-        Copy your table columns directly from SAP and paste below.<br>
-        <strong>Option 1:</strong> List of balances (matches table in BA code order)<br>
-        <strong>Option 2:</strong> Tab-separated <code>[BA] [Balance]</code> (auto-matches by BA code)
-      </p>
-      <textarea 
-        id="paste-area" 
-        class="paste-area" 
-        placeholder="Paste here...&#10;Example:&#10;4109&#9;12,757.45&#10;4046&#9;8,302.03"
-      ></textarea>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closePasteModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="applyPaste()">Apply to Table</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= RESET CONFIRMATION MODAL ================= -->
-  <div id="reset-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h3 class="modal-title">Reset End Balances</h3>
-      <p class="modal-desc">
-        Are you sure you want to clear all End Balance figures for this period to 0.00?
-        Click "Save to Database" afterwards to persist the reset.
-      </p>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeResetModal()">Cancel</button>
-        <button class="btn btn-danger" onclick="applyReset()">Yes, Clear Balances</button>
-      </div>
-    </div>
-  </div>
-
-    <!-- ================= VERSION HISTORY MODAL ================= -->
+  <!-- ================= VERSION HISTORY MODAL ================= -->
   <div id="history-modal" class="modal-overlay hidden">
     <div class="modal-card" style="max-width: 640px;">
       <h3 class="modal-title">📜 Sejarah Kemas Kini (Month-End History)</h3>
       <p class="modal-desc" id="history-modal-desc">
         Senarai arkib kemas kini untuk bulan yang dipilih.
       </p>
-      <div id="history-loading" style="text-align: center; padding: 1.5rem; color: var(--gray-500);">
+      <div id="history-loading" style="text-align: center; padding: 1.5rem; color: var(--slate-500);">
         Memuatkan sejarah rekod dari Turso...
       </div>
       <div id="history-list-container" style="max-height: 320px; overflow-y: auto; display: none;">
@@ -456,6 +483,43 @@
       </div>
     </div>
   </div>
+
+  <!-- ================= PASTE FROM SAP MODAL ================= -->
+  <div id="paste-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 class="modal-title">Paste Data from SAP</h3>
+      <p class="modal-desc">
+        Salin lajur jadual terus dari SAP dan tampal di bawah.<br>
+        <strong>Pilihan 1:</strong> Senarai baki (dipadankan mengikut turutan kod BA)<br>
+        <strong>Pilihan 2:</strong> Format Tab-separated <code>[BA] [Baki]</code> (padanan automatik kod BA)
+      </p>
+      <textarea 
+        id="paste-area" 
+        class="paste-area" 
+        placeholder="Tampal di sini...&#10;Contoh:&#10;4109&#9;12,757.45&#10;4046&#9;8,302.03"
+      ></textarea>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closePasteModal()">Batal</button>
+        <button class="btn btn-primary" onclick="applyPaste()">Terapkan ke Jadual</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RESET CONFIRMATION MODAL ================= -->
+  <div id="reset-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 class="modal-title">Kosongkan Baki Akhir</h3>
+      <p class="modal-desc">
+        Adakah anda pasti mahu mengosongkan semua angka Baki Akhir untuk tempoh ini kepada 0.00?
+        Klik "Save to Database" selepas ini untuk menyimpan perubahan.
+      </p>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeResetModal()">Batal</button>
+        <button class="btn btn-danger" onclick="applyReset()">Ya, Kosongkan Baki</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= TOAST NOTIFICATION ================= -->
   <div id="toast" class="toast">
     <span id="toast-message">Notification message</span>

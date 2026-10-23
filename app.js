@@ -838,17 +838,107 @@ function switchDailyTab(tabIdx) {
   });
 }
 
+
+function changeDailyDateOffset(days) {
+  const dateInput = document.getElementById('daily-report-date');
+  if (!dateInput) return;
+  const curVal = dateInput.value || new Date().toISOString().split('T')[0];
+  const parts = curVal.split('-');
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  dateInput.value = `${yyyy}-${mm}-${dd}`;
+  onDailyDateChange();
+}
+
+function setDailyDateToday() {
+  const dateInput = document.getElementById('daily-report-date');
+  if (!dateInput) return;
+  dateInput.value = new Date().toISOString().split('T')[0];
+  onDailyDateChange();
+}
+
+function updateDailyBadge(status, dateStr) {
+  const badge = document.getElementById('daily-record-badge');
+  if (!badge) return;
+  if (status === 'checking') {
+    badge.className = 'status-badge checking';
+    badge.innerHTML = '<span class="status-dot"></span><span>Menyemak rekod (' + (dateStr || '') + ')...</span>';
+  } else if (status === 'found') {
+    badge.className = 'status-badge found';
+    badge.innerHTML = '<span class="status-dot"></span><span>🟢 Rekod Dijumpai (' + (dateStr || '') + ')</span>';
+  } else if (status === 'clean') {
+    badge.className = 'status-badge clean';
+    badge.innerHTML = '<span class="status-dot"></span><span>⚪ Tiada Rekod (' + (dateStr || '') + ') — Borang Bersih</span>';
+  }
+}
+
+function resetDailyScreenToCleanState() {
+  isRestoringDaily = true;
+  try {
+    ['2859', '6476'].forEach(prefix => {
+      // 1. Reset top input (bank statement balance) to 0
+      const topInp = document.querySelector('.acc-' + prefix + '-top-input');
+      if (topInp) topInp.value = 0;
+
+      // 2. Clear all dynamic maturity, add, and less rows
+      document.querySelectorAll('.acc-' + prefix + '-maturity-input').forEach(i => i.closest('tr').remove());
+      document.querySelectorAll('.acc-' + prefix + '-add-input').forEach(i => i.closest('tr').remove());
+      document.querySelectorAll('.acc-' + prefix + '-less-input').forEach(i => i.closest('tr').remove());
+
+      // 3. Reset placement rows to exactly one row with 0
+      document.querySelectorAll('.acc-' + prefix + '-place-input').forEach(i => i.closest('tr').remove());
+      const addBtnRow = document.getElementById(prefix + '-add-placement-row');
+      if (addBtnRow) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:6px 10px;"><span>Placement</span></td>
+          <td class="text-right" style="padding:6px 10px;"><input type="number" class="row-input acc-${prefix}-place-input" value="0" step="0.01" style="width:100%;"></td>
+          <td class="text-center"><button class="text-red-500 font-bold" onclick="removePlacementRow(this)">✕</button></td>
+        `;
+        addBtnRow.parentNode.insertBefore(tr, addBtnRow);
+      }
+
+      // 4. Reset investment rows to default seed
+      const invBody = document.getElementById('invest-body-' + prefix);
+      if (invBody) {
+        invBody.innerHTML = '';
+        defaultInvest.forEach(r => createInvestRow(prefix, r));
+      }
+    });
+
+    // 5. Reset outgoing table back to defaults with 0 and empty dates
+    const outBody = document.getElementById('outgoing-body');
+    if (outBody) {
+      outBody.innerHTML = '';
+      outgoingDefaultCategories.forEach(label => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${label}</td>
+          <td class="text-right"><input type="number" class="row-input out-input" value="0" step="0.01"></td>
+          <td class="text-right"><input type="date" class="row-input" value=""></td>
+        `;
+        outBody.appendChild(tr);
+      });
+      const totalTr = document.createElement('tr');
+      totalTr.className = 'section-total';
+      totalTr.innerHTML = '<td>Total Outgoing</td><td class="text-right" id="out-total">0.00</td><td></td>';
+      outBody.appendChild(totalTr);
+    }
+  } finally {
+    isRestoringDaily = false;
+    recalcDaily();
+  }
+}
+
 function buildDailyTables() {
   buildAccountTables('2859', lessItems2859, addItems2859);
   buildAccountTables('6476', lessItems6476, addItems6476);
   buildOutgoingTable();
 
   // Seed default investments if empty
-  const defaultInvest = [
-    { inst: "KAF", date: "2024-02-11", maturity: "", rate: "3.02", from: "Sukuk+tolling", bal: "", amt: "0" },
-    { inst: "MBB", date: "", maturity: "", rate: "", from: "", bal: "", amt: "0" },
-    { inst: "MBSB (Long-Term)", date: "", maturity: "", rate: "3.60", from: "Tolling", bal: "15,000,000.00", amt: "15,000,000.00" }
-  ];
   ['2859', '6476'].forEach(prefix => {
     const body = document.getElementById('invest-body-' + prefix);
     if (body && body.children.length === 0) {
@@ -1263,6 +1353,25 @@ function recalcAccountSection(prefix) {
     netEl.textContent = fmt(netBal);
     netEl.style.color = netBal < 0 ? '#ef4444' : '#059669';
   }
+
+  // Update Executive Hero KPI Cards
+  const heroAvail = document.getElementById('hero-avail-' + prefix);
+  if (heroAvail) heroAvail.textContent = 'RM ' + fmt(avail);
+
+  const heroDeduct = document.getElementById('hero-deduct-' + prefix);
+  if (heroDeduct) heroDeduct.textContent = 'RM ' + fmt(deductTot);
+
+  const heroNet = document.getElementById('hero-net-' + prefix);
+  if (heroNet) {
+    heroNet.textContent = 'RM ' + fmt(netBal);
+    if (netBal >= 0) {
+      heroNet.classList.remove('text-rose');
+      heroNet.classList.add('text-emerald');
+    } else {
+      heroNet.classList.remove('text-emerald');
+      heroNet.classList.add('text-rose');
+    }
+  }
 }
 
 function checkUpcomingPayments() {
@@ -1426,6 +1535,7 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
 
     if (res.ok) {
       const nowTime = new Date().toLocaleTimeString('en-GB');
+      updateDailyBadge('found', dateStr);
       if (saveBtn) {
         saveBtn.textContent = isAutoSave ? '✅ Disimpan ke Database (' + nowTime + ')' : '✅ Berjaya Disimpan (' + nowTime + ')!';
         saveBtn.style.backgroundColor = '#059669';
@@ -1459,6 +1569,9 @@ async function fetchDailyCashflowFromTurso() {
   const dateInput = document.getElementById('daily-report-date');
   const dateStr = dateInput?.value || new Date().toISOString().split('T')[0];
 
+  updateDailyBadge('checking', dateStr);
+  buildDailyTables();
+
   // DIRECT FETCH FROM TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
     const res = await fetch(TURSO_CONFIG.url, {
@@ -1486,6 +1599,7 @@ async function fetchDailyCashflowFromTurso() {
       const val = json.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value;
       if (val) {
         restoreDailyState(JSON.parse(val));
+        updateDailyBadge('found', dateStr);
         return;
       }
     }
@@ -1493,8 +1607,9 @@ async function fetchDailyCashflowFromTurso() {
     console.warn('Fetch daily from Turso error:', err);
   }
 
-  // If no record found in database for this date, build clean default tables
-  buildDailyTables();
+  // If no record found in database for this date, reset all daily screen data cleanly to 0
+  resetDailyScreenToCleanState();
+  updateDailyBadge('clean', dateStr);
 }
 
 function restoreDailyState(state) {
