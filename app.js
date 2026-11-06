@@ -833,7 +833,10 @@ function triggerPrint() { window.print(); }
 
 // ================= MODULE 2: DAILY CASHFLOW LOGIC =================
 
+let currentDailyTab = 1;
+
 function switchDailyTab(tabIdx) {
+  currentDailyTab = tabIdx;
   [1, 2, 3].forEach(i => {
     const page = document.getElementById('daily-page-' + i);
     if (page) page.style.display = tabIdx === i ? 'block' : 'none';
@@ -1701,7 +1704,223 @@ function onDailyDateChange() {
 }
 
 function exportDailyPDF() {
-  window.print();
+  let tab = currentDailyTab || 1;
+  const p1 = document.getElementById('daily-page-1');
+  const p2 = document.getElementById('daily-page-2');
+  const p3 = document.getElementById('daily-page-3');
+  if (p1 && p1.style.display !== 'none') {
+    tab = 1;
+  } else if (p2 && p2.style.display !== 'none') {
+    tab = 2;
+  } else if (p3 && p3.style.display !== 'none') {
+    tab = 3;
+  }
+
+  const reportDateRaw = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
+  const [year, month, day] = reportDateRaw.split('-');
+  const reportDate = `${day}-${month}-${year}`;
+  const companyName = "FGV PALM INDUSTRIES SDN BHD";
+  const companyReg = "Company No.: 199501030378 (359584-V)";
+  const divisionInfo = "Treasury Division";
+
+  let printContent = '';
+
+  if (tab === 1 || tab === 2) {
+    const prefix = tab === 1 ? '2859' : '6476';
+    const accountNo = tab === 1 ? '564098512859' : '564212106476';
+
+    const availBal = parseVal(document.querySelector('.acc-' + prefix + '-top-input')?.value || '0');
+
+    // Maturity rows
+    const maturityInputs = [...document.querySelectorAll('.acc-' + prefix + '-maturity-input')];
+    const maturityRows = maturityInputs.map(inp => ({
+      label: getRowLabel(inp.closest('tr')),
+      value: parseVal(inp.value)
+    })).filter(r => r.value !== 0);
+
+    // Add rows
+    const addInputs = [...document.querySelectorAll('.acc-' + prefix + '-add-input')];
+    const addRows = addInputs.map(inp => ({
+      label: getRowLabel(inp.closest('tr')),
+      value: parseVal(inp.value)
+    })).filter(r => r.value !== 0);
+
+    // Available balance
+    const availBalance = parseVal(document.getElementById(prefix + '-avail-balance')?.textContent || '0');
+
+    // Deductions / Less rows
+    const lessInputs = [...document.querySelectorAll('.acc-' + prefix + '-less-input')];
+    const lessRows = lessInputs.map(inp => ({
+      label: getRowLabel(inp.closest('tr')),
+      value: parseVal(inp.value)
+    })).filter(r => r.value !== 0);
+
+    // Total deductions
+    const totalDeductions = parseVal(document.getElementById(prefix + '-total-deductions')?.textContent || '0');
+
+    // Final position
+    const balPlacement = parseVal(document.getElementById(prefix + '-bal-placement')?.textContent || '0');
+    const placementInputs = [...document.querySelectorAll('.acc-' + prefix + '-place-input')];
+    const placementRowsData = placementInputs.map(inp => parseVal(inp.value));
+    const netBalance = parseVal(document.getElementById(prefix + '-net-balance')?.textContent || '0');
+
+    // Investments
+    const investRows = [];
+    document.querySelectorAll('#invest-body-' + prefix + ' tr').forEach(tr => {
+      const inputs = tr.querySelectorAll('input');
+      const dayText = tr.querySelector('[data-field="day"]')?.textContent || '-';
+      const profitText = tr.querySelector('[data-field="profit"]')?.textContent || '0.00';
+      const totalText = tr.querySelector('[data-field="total"]')?.textContent || '0.00';
+      if (inputs.length >= 7) {
+        investRows.push({
+          inst: inputs[0].value,
+          date: inputs[1].value,
+          maturity: inputs[2].value,
+          day: dayText,
+          rate: inputs[3].value,
+          profit: profitText,
+          from: inputs[4].value,
+          bal: inputs[5].value,
+          amt: inputs[6].value,
+          total: totalText
+        });
+      }
+    });
+
+    printContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Cash Status Report - MBB ${accountNo}</title><style>
+      body { font-family: Arial, sans-serif; font-size: 10pt; margin: 24px 32px; color: #1a1a1a; }
+      .print-header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; }
+      .print-header h1 { font-size: 13pt; margin: 4px 0; color: #1e3a5f; font-weight: bold; }
+      .print-header p { font-size: 9pt; margin: 2px 0; color: #475569; }
+      .report-meta { font-size: 9pt; color: #475569; margin-bottom: 20px; }
+      .section { margin-bottom: 24px; }
+      .section-bar { padding: 4px 0 4px 8px; margin-bottom: 0; border-left: 3px solid #1e3a5f; }
+      .section-bar h2 { font-size: 10pt; font-weight: 700; color: #1e3a5f; margin: 0; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 5px 12px; font-size: 9.5pt; border-bottom: 1px solid #e8ecf0; }
+      td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+      tr.subtotal td { font-weight: 700; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background: #f8fafc; }
+      tr.final td { font-weight: 700; border-top: 2px solid #1e3a5f; background: #f0f7ff; font-size: 10pt; }
+      tr.no-bold td { font-weight: 400; }
+      .indent td:first-child { padding-left: 28px; }
+      @media print { body { margin: 16px; } }
+    </style></head><body>`;
+
+    printContent += `<div class="print-header"><h1>${companyName}</h1><p>${companyReg}</p><p>${divisionInfo}</p></div>`;
+    printContent += `<div class="report-meta"><strong>Daily Cash Status Report</strong> &nbsp;|&nbsp; Account: MBB ${accountNo} &nbsp;|&nbsp; Date: ${reportDate}</div>`;
+
+    // Section 1: Bank Position
+    printContent += `<div class="section"><div class="section-bar"><h2>Bank Position</h2></div><table>`;
+    printContent += `<tr><td>Bank Statement Balance</td><td class="amt">${fmt(availBal)}</td></tr>`;
+    maturityRows.forEach(r => {
+      printContent += `<tr class="indent"><td>Maturity: ${r.label}</td><td class="amt">${fmt(r.value)}</td></tr>`;
+    });
+    addRows.forEach(r => {
+      printContent += `<tr class="indent"><td>${r.label}</td><td class="amt">${fmt(r.value)}</td></tr>`;
+    });
+    printContent += `<tr class="subtotal no-bold"><td>Available Balance</td><td class="amt">${fmt(availBalance)}</td></tr>`;
+    printContent += `</table></div>`;
+
+    // Section 2: Deductions
+    printContent += `<div class="section"><div class="section-bar"><h2>Deductions</h2></div><table>`;
+    lessRows.forEach(r => {
+      let label = r.label;
+      if (label.startsWith('Transfer to')) label = `Transfer to Account ${label.replace('Transfer to ', '')}`;
+      printContent += `<tr class="indent"><td>${label}</td><td class="amt">${fmt(r.value)}</td></tr>`;
+    });
+    printContent += `<tr class="subtotal no-bold"><td>Total Deductions</td><td class="amt">${fmt(totalDeductions)}</td></tr>`;
+    printContent += `</table></div>`;
+
+    // Section 3: Final Position
+    printContent += `<div class="section"><div class="section-bar"><h2>Final Position</h2></div><table>`;
+    printContent += `<tr class="subtotal no-bold"><td>Balance Available for Placement</td><td class="amt">${fmt(balPlacement)}</td></tr>`;
+    placementRowsData.forEach(val => {
+      printContent += `<tr><td style="padding-left: 20px;">Placement</td><td class="amt" style="font-weight: normal;">${fmt(val)}</td></tr>`;
+    });
+    printContent += `<tr class="final"><td>Net Balance</td><td class="amt">${fmt(netBalance)}</td></tr>`;
+    printContent += `</table></div>`;
+
+    // Section 4: Investment
+    if (investRows.length > 0) {
+      printContent += `<div class="section"><div class="section-bar"><h2>Investment</h2></div>`;
+      printContent += `<table style="font-size: 8pt;"><thead><tr style="color:#64748b;font-weight:bold;border-bottom:1px solid #cbd5e1;"><th style="padding:4px;text-align:left;">Institution</th><th style="padding:4px;text-align:left;">Date</th><th style="padding:4px;text-align:left;">Maturity</th><th style="padding:4px;text-align:center;">Day</th><th style="padding:4px;text-align:right;">Rate%</th><th style="padding:4px;text-align:right;">Profit</th><th style="padding:4px;text-align:left;">From</th><th style="padding:4px;text-align:right;">Balance</th><th style="padding:4px;text-align:right;">Placement</th><th style="padding:4px;text-align:right;">Total (RM)</th></tr></thead><tbody>`;
+      investRows.forEach(r => {
+        const formattedAmt = parseVal(r.amt) > 0 ? fmt(parseVal(r.amt)) : (r.amt === '0' || r.amt === 0 ? '0.00' : r.amt);
+        printContent += `<tr><td style="padding:4px;">${r.inst}</td><td style="padding:4px;">${r.date}</td><td style="padding:4px;">${r.maturity}</td><td style="padding:4px;text-align:center;">${r.day}</td><td style="padding:4px;text-align:right;">${r.rate}</td><td style="padding:4px;text-align:right;">${r.profit}</td><td style="padding:4px;">${r.from}</td><td style="padding:4px;text-align:right;">${r.bal}</td><td style="padding:4px;text-align:right;">${formattedAmt}</td><td style="padding:4px;text-align:right;">${r.total}</td></tr>`;
+      });
+      printContent += `</tbody></table></div>`;
+    }
+
+    printContent += '</body></html>';
+
+  } else if (tab === 3) {
+    printContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Expected Outgoing Payment - ${reportDate}</title><style>
+      body { font-family: Arial, sans-serif; font-size: 10pt; margin: 24px 32px; color: #1a1a1a; }
+      .print-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; }
+      .print-header h1 { font-size: 13pt; margin: 4px 0; color: #1e3a5f; font-weight: bold; }
+      .print-header p { font-size: 9pt; margin: 2px 0; color: #475569; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #1e3a5f; color: white; padding: 6px 8px; text-align: left; font-size: 9pt; }
+      td { padding: 5px 8px; border-bottom: 1px solid #e8ecf0; font-size: 9.5pt; }
+      .total-row { font-weight: 700; background: #f0f7ff; border-top: 2px solid #1e3a5f; }
+      @media print { body { margin: 16px; } }
+    </style></head><body>`;
+    printContent += `<div class="print-header"><h1>${companyName}</h1><p>${companyReg}</p><p>${divisionInfo}</p></div>`;
+    printContent += `<p style="font-weight:bold;margin-bottom:10px;font-size:9.5pt;color:#475569;">Expected Outgoing Payment &nbsp;|&nbsp; Date: ${reportDate}</p>`;
+    printContent += '<table><thead><tr><th>Outgoing Payment</th><th style="text-align:right;">Amount (RM)</th><th style="text-align:right;">Due Date</th></tr></thead><tbody>';
+
+    const outTable = document.getElementById('table-outgoing');
+    if (outTable) {
+      outTable.querySelectorAll('tbody tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length < 2) return;
+        const label = getRowLabel(tr);
+        const input = cells[1].querySelector('input');
+        const amount = input ? parseVal(input.value) : 0;
+        const dateInp = cells[2] ? cells[2].querySelector('input') : null;
+        const dueDate = dateInp ? dateInp.value : '';
+        const isTotal = tr.classList.contains('section-total');
+        if (isTotal) {
+          printContent += `<tr class="total-row"><td>${label}</td><td style="text-align:right;">${fmt(amount)}</td><td></td></tr>`;
+        } else if (amount !== 0 || dueDate) {
+          printContent += `<tr><td>${label}</td><td style="text-align:right;">${fmt(amount)}</td><td style="text-align:right;">${dueDate}</td></tr>`;
+        }
+      });
+    }
+    printContent += '</tbody></table></body></html>';
+  }
+
+  // Open popup print window or fallback to hidden iframe
+  const printWindow = window.open('', '_blank', 'width=950,height=750');
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
+  } else {
+    let iframe = document.getElementById('daily-print-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'daily-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(printContent);
+    iframe.contentWindow.document.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 250);
+  }
 }
 
 // Global Event Listeners for Daily Cashflow auto-recalc and auto-save
