@@ -107,6 +107,38 @@ let dailyAutoSaveTimer = null;
 let monthEndAutoSaveTimer = null;
 let isRestoringDaily = false;
 let hasUnsavedChanges = false;
+let lastDailySyncAt = null;
+let lastDailySyncDate = null;
+let lastMonthEndSyncAt = null;
+let lastMonthEndSyncPeriod = null;
+let isDailyDirty = false;
+let isSavingDaily = false;
+let isSavingMonthEnd = false;
+let isSyncChecking = false;
+let liveSyncTimer = null;
+const LIVE_SYNC_INTERVAL_MS = 4000;
+
+async function tursoPipeline(requests) {
+  const res = await fetch(TURSO_CONFIG.url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + TURSO_CONFIG.token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      requests: [...requests, { type: 'close' }]
+    })
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function isUserEditingInModule(moduleId) {
+  const active = document.activeElement;
+  if (!active || !active.closest('#' + moduleId)) return false;
+  const tag = active.tagName;
+  return (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && active.id !== 'daily-report-date' && active.id !== 'search-input';
+}
 
 // ================= GENERAL HELPERS =================
 
@@ -233,9 +265,17 @@ function unlockPortal() {
   buildDailyTables();
   fetchBalances();
   fetchDailyCashflowFromTurso();
+  startLiveSync();
 }
 
 function handleLogout() {
+  stopLiveSync();
+  lastDailySyncAt = null;
+  lastDailySyncDate = null;
+  lastMonthEndSyncAt = null;
+  lastMonthEndSyncPeriod = null;
+  isDailyDirty = false;
+  hasUnsavedChanges = false;
   sessionStorage.removeItem('fpi_treasury_token');
   document.getElementById('dashboard-app').style.display = 'none';
   document.getElementById('lock-screen').style.display = 'flex';
@@ -287,6 +327,10 @@ function switchPortalModule(mod) {
       ? 'Daily Cash Status & Treasury Operations'
       : 'Project Month-End Balance Dashboard';
   }
+
+  if ((isDaily && lastDailySyncDate) || (!isDaily && lastMonthEndSyncPeriod)) {
+    runLiveSyncCheck();
+  }
 }
 
 // ================= MODULE 1: MONTH-END BALANCE LOGIC =================
@@ -322,16 +366,20 @@ function updatePeriodDisplay(period) {
 }
 
 function changePeriod() {
+  clearTimeout(monthEndAutoSaveTimer);
   const period = getSelectedPeriod();
   const pickerEl = document.getElementById('period-picker');
   if (pickerEl) pickerEl.value = period;
   fetchBalances();
 }
 
-async function fetchBalances() {
+async function fetchBalances(isSilentSync = false) {
   const period = getSelectedPeriod();
   const periodPrefix = getPeriodPrefix();
-  updatePeriodDisplay(period);
+  if (!isSilentSync) {
+    hasUnsavedChanges = false;
+    updatePeriodDisplay(period);
+  }
 
   const tursoDot = document.getElementById('turso-dot');
   const tursoText = document.getElementById('turso-text');
@@ -344,32 +392,21 @@ async function fetchBalances() {
       LEFT JOIN balances b ON p.ba = b.ba AND (b.period = ? OR b.period LIKE ?)
       ORDER BY p.bil ASC;
     `;
-    const res = await fetch(TURSO_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            type: 'execute',
-            stmt: {
-              sql: query,
-              args: [
-                { type: 'text', value: period },
-                { type: 'text', value: periodPrefix + '%' }
-              ]
-            }
-          },
-          { type: 'close' }
-        ]
-      })
-    });
+    const periodArgs = [
+      { type: 'text', value: period },
+      { type: 'text', value: periodPrefix + '%' }
+    ];
+    const json = await tursoPipeline([
+      { type: 'execute', stmt: { sql: query, args: periodArgs } },
+      { type: 'execute', stmt: { sql: 'SELECT MAX(updated_at) FROM balances WHERE period = ? OR period LIKE ?;', args: periodArgs } }
+    ]);
 
-    if (res.ok) {
-      const json = await res.json();
+    if (json) {
+      if (getSelectedPeriod() !== period) return;
+      if (isSilentSync && (hasUnsavedChanges || isSavingMonthEnd || isUserEditingInModule('module-month-end'))) return;
+
       const rows = json.results?.[0]?.response?.result?.rows;
+      const maxUpdatedAt = json.results?.[1]?.response?.result?.rows?.[0]?.[0]?.value ?? null;
       if (Array.isArray(rows) && rows.length > 0) {
         let hasCustomBalance = false;
         projectsData = rows.map(r => {
@@ -386,6 +423,10 @@ async function fetchBalances() {
           };
         });
 
+        lastMonthEndSyncPeriod = period;
+        lastMonthEndSyncAt = maxUpdatedAt;
+        hasUnsavedChanges = false;
+
         if (tursoDot) tursoDot.className = 'status-dot';
         if (tursoText) {
           tursoText.textContent = hasCustomBalance 
@@ -393,12 +434,17 @@ async function fetchBalances() {
             : 'Turso Database (Bulan Baharu - Sedia Dimasukkan)';
         }
         renderTable();
+        if (isSilentSync) {
+          showToast('🔄 Baki Month-End dikemas kini daripada sesi lain.');
+        }
         return;
       }
     }
   } catch (err) {
     console.warn('Turso query error:', err);
   }
+
+  if (isSilentSync) return;
 
   // Fallback to default
   projectsData = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
@@ -408,6 +454,7 @@ async function fetchBalances() {
 }
 
 function triggerMonthEndAutoSave(delayMs = 1200) {
+  hasUnsavedChanges = true;
   clearTimeout(monthEndAutoSaveTimer);
   const saveBtn = document.getElementById('save-btn');
   if (saveBtn) {
@@ -421,6 +468,7 @@ function triggerMonthEndAutoSave(delayMs = 1200) {
 
 async function saveToTurso(isAutoSave = false) {
   clearTimeout(monthEndAutoSaveTimer);
+  isSavingMonthEnd = true;
   const period = getSelectedPeriod();
   const periodPrefix = getPeriodPrefix();
   const saveBtn = document.getElementById('save-btn');
@@ -436,33 +484,22 @@ async function saveToTurso(isAutoSave = false) {
   }));
 
   try {
+    const periodArgs = [
+      { type: 'text', value: period },
+      { type: 'text', value: periodPrefix + '%' }
+    ];
+
     // 1. Check if records already exist for this month
-    const checkRes = await fetch(TURSO_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            type: 'execute',
-            stmt: {
-              sql: 'SELECT COUNT(*) as count FROM balances WHERE period = ? OR period LIKE ?;',
-              args: [
-                { type: 'text', value: period },
-                { type: 'text', value: periodPrefix + '%' }
-              ]
-            }
-          },
-          { type: 'close' }
-        ]
-      })
-    });
+    const checkJson = await tursoPipeline([{
+      type: 'execute',
+      stmt: {
+        sql: 'SELECT COUNT(*) as count FROM balances WHERE period = ? OR period LIKE ?;',
+        args: periodArgs
+      }
+    }]);
 
     let isUpdate = false;
-    if (checkRes.ok) {
-      const checkJson = await checkRes.json();
+    if (checkJson) {
       const count = Number(checkJson.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value || 0);
       if (count > 0) isUpdate = true;
     }
@@ -478,21 +515,18 @@ async function saveToTurso(isAutoSave = false) {
                 SELECT period, ba, balance, datetime('now')
                 FROM balances
                 WHERE period = ? OR period LIKE ?;`,
-          args: [
-            { type: 'text', value: period },
-            { type: 'text', value: periodPrefix + '%' }
-          ]
+          args: periodArgs
         }
       });
     }
 
-    // 3. Upsert current items into balances
+    // 3. Upsert current items into balances with millisecond timestamp
     items.forEach(item => {
       requests.push({
         type: 'execute',
         stmt: {
           sql: `INSERT INTO balances (period, ba, balance, updated_at) 
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
                 ON CONFLICT(period, ba) DO UPDATE SET
                   balance = excluded.balance,
                   updated_at = excluded.updated_at;`,
@@ -505,18 +539,20 @@ async function saveToTurso(isAutoSave = false) {
       });
     });
 
-    requests.push({ type: 'close' });
-
-    const res = await fetch(TURSO_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ requests })
+    const syncStmtIdx = requests.length;
+    requests.push({
+      type: 'execute',
+      stmt: {
+        sql: 'SELECT MAX(updated_at) FROM balances WHERE period = ? OR period LIKE ?;',
+        args: periodArgs
+      }
     });
 
-    if (res.ok) {
+    const json = await tursoPipeline(requests);
+
+    if (json) {
+      lastMonthEndSyncPeriod = period;
+      lastMonthEndSyncAt = json.results?.[syncStmtIdx]?.response?.result?.rows?.[0]?.[0]?.value ?? null;
       hasUnsavedChanges = false;
       const nowTime = new Date().toLocaleTimeString('en-GB');
       if (saveBtn) {
@@ -542,6 +578,8 @@ async function saveToTurso(isAutoSave = false) {
     if (!isAutoSave) {
       showToast('Gagal simpan ke database: ' + err.message, 'error');
     }
+  } finally {
+    isSavingMonthEnd = false;
   }
 
   if (saveBtn) {
@@ -669,6 +707,7 @@ async function restoreHistoricalSnapshot(archivedAt) {
           p.balance = map[p.ba];
         }
       });
+      hasUnsavedChanges = true;
       renderTable();
       closeHistoryModal();
       showToast(`Sejarah ${archivedAt} dipulihkan! Sila klik Simpan untuk mengekalkannya.`);
@@ -936,26 +975,32 @@ function resetDailyScreenToCleanState() {
       totalTr.innerHTML = '<td>Total Outgoing</td><td class="text-right" id="out-total">0.00</td><td></td>';
       outBody.appendChild(totalTr);
     }
+    recalcDaily();
   } finally {
     isRestoringDaily = false;
-    recalcDaily();
   }
 }
 
 function buildDailyTables() {
-  buildAccountTables('2859', lessItems2859, addItems2859);
-  buildAccountTables('6476', lessItems6476, addItems6476);
-  buildOutgoingTable();
+  const wasRestoring = isRestoringDaily;
+  isRestoringDaily = true;
+  try {
+    buildAccountTables('2859', lessItems2859, addItems2859);
+    buildAccountTables('6476', lessItems6476, addItems6476);
+    buildOutgoingTable();
 
-  // Seed default investments if empty
-  ['2859', '6476'].forEach(prefix => {
-    const body = document.getElementById('invest-body-' + prefix);
-    if (body && body.children.length === 0) {
-      defaultInvest.forEach(r => createInvestRow(prefix, r));
-    }
-  });
+    // Seed default investments if empty
+    ['2859', '6476'].forEach(prefix => {
+      const body = document.getElementById('invest-body-' + prefix);
+      if (body && body.children.length === 0) {
+        defaultInvest.forEach(r => createInvestRow(prefix, r));
+      }
+    });
 
-  recalcDaily();
+    recalcDaily();
+  } finally {
+    isRestoringDaily = wasRestoring;
+  }
 }
 
 function buildAccountTables(prefix, lessList, addList) {
@@ -1477,6 +1522,7 @@ function serializeDailyState() {
 
 function triggerDailyAutoSave(delayMs = 1200) {
   if (isRestoringDaily) return;
+  isDailyDirty = true;
   const saveBtn = document.getElementById('daily-save-btn');
   if (saveBtn) {
     saveBtn.textContent = '⏳ Menyimpan ke Database Turso...';
@@ -1490,6 +1536,7 @@ function triggerDailyAutoSave(delayMs = 1200) {
 
 async function saveDailyCashflowToTurso(isAutoSave = false) {
   clearTimeout(dailyAutoSaveTimer);
+  isSavingDaily = true;
   const saveBtn = document.getElementById('daily-save-btn');
   if (saveBtn) {
     saveBtn.disabled = true;
@@ -1502,6 +1549,7 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
     state = serializeDailyState();
   } catch (err) {
     console.error('Serialization error:', err);
+    isSavingDaily = false;
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.textContent = '💾 Save Daily Cashflow to Database';
@@ -1515,34 +1563,34 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
 
   // NOTE: DIRECT SAVE TO TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
-    const res = await fetch(TURSO_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
-        'Content-Type': 'application/json'
+    const json = await tursoPipeline([
+      {
+        type: 'execute',
+        stmt: {
+          sql: `INSERT INTO daily_cashflow (report_date, data_json, updated_at)
+                VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
+                ON CONFLICT(report_date) DO UPDATE SET
+                  data_json = excluded.data_json,
+                  updated_at = excluded.updated_at;`,
+          args: [
+            { type: 'text', value: dateStr },
+            { type: 'text', value: jsonStr }
+          ]
+        }
       },
-      body: JSON.stringify({
-        requests: [
-          {
-            type: 'execute',
-            stmt: {
-              sql: `INSERT INTO daily_cashflow (report_date, data_json, updated_at)
-                    VALUES (?, ?, datetime('now'))
-                    ON CONFLICT(report_date) DO UPDATE SET
-                      data_json = excluded.data_json,
-                      updated_at = excluded.updated_at;`,
-              args: [
-                { type: 'text', value: dateStr },
-                { type: 'text', value: jsonStr }
-              ]
-            }
-          },
-          { type: 'close' }
-        ]
-      })
-    });
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT updated_at FROM daily_cashflow WHERE report_date = ?;',
+          args: [{ type: 'text', value: dateStr }]
+        }
+      }
+    ]);
 
-    if (res.ok) {
+    if (json) {
+      lastDailySyncDate = dateStr;
+      lastDailySyncAt = json.results?.[1]?.response?.result?.rows?.[0]?.[0]?.value ?? null;
+      isDailyDirty = false;
       const nowTime = new Date().toLocaleTimeString('en-GB');
       updateDailyBadge('found', dateStr);
       if (saveBtn) {
@@ -1565,6 +1613,8 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
     if (!isAutoSave) {
       showToast('Gagal simpan ke database: ' + err.message, 'error');
     }
+  } finally {
+    isSavingDaily = false;
   }
 
   if (saveBtn) {
@@ -1574,47 +1624,61 @@ async function saveDailyCashflowToTurso(isAutoSave = false) {
   }
 }
 
-async function fetchDailyCashflowFromTurso() {
+async function fetchDailyCashflowFromTurso(isSilentSync = false) {
   const dateInput = document.getElementById('daily-report-date');
   const dateStr = dateInput?.value || new Date().toISOString().split('T')[0];
 
-  updateDailyBadge('checking', dateStr);
-  buildDailyTables();
+  if (!isSilentSync) {
+    isDailyDirty = false;
+    updateDailyBadge('checking', dateStr);
+    buildDailyTables();
+  }
 
   // DIRECT FETCH FROM TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
-    const res = await fetch(TURSO_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + TURSO_CONFIG.token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            type: 'execute',
-            stmt: {
-              sql: 'SELECT data_json FROM daily_cashflow WHERE report_date = ?;',
-              args: [{ type: 'text', value: dateStr }]
-            }
-          },
-          { type: 'close' }
-        ]
-      })
-    });
+    const json = await tursoPipeline([{
+      type: 'execute',
+      stmt: {
+        sql: 'SELECT data_json, updated_at FROM daily_cashflow WHERE report_date = ?;',
+        args: [{ type: 'text', value: dateStr }]
+      }
+    }]);
 
-    if (res.ok) {
-      const json = await res.json();
-      const val = json.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value;
+    if (json) {
+      const currentDateStr = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
+      if (currentDateStr !== dateStr) return;
+      if (isSilentSync && (isDailyDirty || isSavingDaily || isUserEditingInModule('module-daily-cashflow'))) return;
+
+      const row = json.results?.[0]?.response?.result?.rows?.[0];
+      const val = row?.[0]?.value;
+      const updatedAt = row?.[1]?.value ?? null;
       if (val) {
         restoreDailyState(JSON.parse(val));
+        lastDailySyncDate = dateStr;
+        lastDailySyncAt = updatedAt;
+        isDailyDirty = false;
         updateDailyBadge('found', dateStr);
+        if (isSilentSync) {
+          showToast('🔄 Data Daily Cashflow dikemas kini daripada sesi lain.');
+        }
         return;
       }
+
+      const hadRemoteRecord = lastDailySyncDate === dateStr && lastDailySyncAt !== null;
+      lastDailySyncDate = dateStr;
+      lastDailySyncAt = null;
+      isDailyDirty = false;
+      if (!isSilentSync || hadRemoteRecord) {
+        resetDailyScreenToCleanState();
+        updateDailyBadge('clean', dateStr);
+      }
+      return;
     }
   } catch (err) {
     console.warn('Fetch daily from Turso error:', err);
   }
+
+  if (isSilentSync) return;
 
   // If no record found in database for this date, reset all daily screen data cleanly to 0
   resetDailyScreenToCleanState();
@@ -1653,12 +1717,16 @@ function restoreDailyState(state) {
         accData.less.forEach((l, idx) => { if (inps[idx]) inps[idx].value = l.val || 0; });
       }
 
-      const placeInps = document.querySelectorAll('.acc-' + prefix + '-place-input');
       if (Array.isArray(accData.place)) {
-        while (document.querySelectorAll('.acc-' + prefix + '-place-input').length < accData.place.length) {
+        const getPlaces = () => document.querySelectorAll('.acc-' + prefix + '-place-input');
+        while (getPlaces().length < accData.place.length) {
           addPlacementRow(prefix);
         }
-        const currentPlaces = document.querySelectorAll('.acc-' + prefix + '-place-input');
+        while (getPlaces().length > accData.place.length && getPlaces().length > 0) {
+          const list = getPlaces();
+          list[list.length - 1].closest('tr').remove();
+        }
+        const currentPlaces = getPlaces();
         accData.place.forEach((val, idx) => { if (currentPlaces[idx]) currentPlaces[idx].value = val || 0; });
       }
 
@@ -1692,9 +1760,9 @@ function restoreDailyState(state) {
       }
     }
 
+    recalcDaily();
   } finally {
     isRestoringDaily = false;
-    recalcDaily();
   }
 }
 
@@ -1922,6 +1990,101 @@ function exportDailyPDF() {
     }, 250);
   }
 }
+
+// ================= LIVE AUTO-SYNC (SMART POLLING) =================
+
+function isAnyModalOpen() {
+  return ['history-modal', 'paste-modal', 'reset-modal'].some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains('hidden');
+  });
+}
+
+async function checkDailySyncUpdate() {
+  if (isSavingDaily || isDailyDirty || isRestoringDaily || isUserEditingInModule('module-daily-cashflow')) return;
+  const dateStr = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
+  if (lastDailySyncDate !== dateStr) return;
+
+  const json = await tursoPipeline([{
+    type: 'execute',
+    stmt: {
+      sql: 'SELECT updated_at FROM daily_cashflow WHERE report_date = ?;',
+      args: [{ type: 'text', value: dateStr }]
+    }
+  }]);
+  if (!json) return;
+
+  const currentDateStr = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
+  if (currentDateStr !== dateStr || isSavingDaily || isDailyDirty || isUserEditingInModule('module-daily-cashflow')) return;
+
+  const remoteUpdatedAt = json.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value ?? null;
+  if (remoteUpdatedAt !== lastDailySyncAt) {
+    await fetchDailyCashflowFromTurso(true);
+  }
+}
+
+async function checkMonthEndSyncUpdate() {
+  if (isSavingMonthEnd || hasUnsavedChanges || isAnyModalOpen() || isUserEditingInModule('module-month-end')) return;
+  const period = getSelectedPeriod();
+  const periodPrefix = getPeriodPrefix();
+  if (lastMonthEndSyncPeriod !== period) return;
+
+  const json = await tursoPipeline([{
+    type: 'execute',
+    stmt: {
+      sql: 'SELECT MAX(updated_at) FROM balances WHERE period = ? OR period LIKE ?;',
+      args: [
+        { type: 'text', value: period },
+        { type: 'text', value: periodPrefix + '%' }
+      ]
+    }
+  }]);
+  if (!json) return;
+
+  if (getSelectedPeriod() !== period || isSavingMonthEnd || hasUnsavedChanges || isAnyModalOpen() || isUserEditingInModule('module-month-end')) return;
+
+  const remoteUpdatedAt = json.results?.[0]?.response?.result?.rows?.[0]?.[0]?.value ?? null;
+  if (remoteUpdatedAt !== lastMonthEndSyncAt) {
+    await fetchBalances(true);
+  }
+}
+
+async function runLiveSyncCheck() {
+  if (isSyncChecking) return;
+  if (document.visibilityState !== 'visible') return;
+  if (!sessionStorage.getItem('fpi_treasury_token')) return;
+
+  isSyncChecking = true;
+  try {
+    if (currentPortalModule === 'daily-cashflow') {
+      await checkDailySyncUpdate();
+    } else if (currentPortalModule === 'month-end') {
+      await checkMonthEndSyncUpdate();
+    }
+  } catch (err) {
+    console.warn('Live sync check error:', err);
+  } finally {
+    isSyncChecking = false;
+  }
+}
+
+function startLiveSync() {
+  stopLiveSync();
+  liveSyncTimer = setInterval(runLiveSyncCheck, LIVE_SYNC_INTERVAL_MS);
+}
+
+function stopLiveSync() {
+  if (liveSyncTimer) {
+    clearInterval(liveSyncTimer);
+    liveSyncTimer = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sessionStorage.getItem('fpi_treasury_token')) {
+    runLiveSyncCheck();
+  }
+});
 
 // Global Event Listeners for Daily Cashflow auto-recalc and auto-save
 document.addEventListener('input', (e) => {
