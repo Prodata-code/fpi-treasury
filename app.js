@@ -177,6 +177,49 @@ function calcReversal(balance) {
   return Math.ceil((bal - 10000) / 1000) * 1000;
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function openPrintDocument(printContent, iframeId = 'portal-print-iframe') {
+  const printWindow = window.open('', '_blank', 'width=950,height=750');
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
+    return;
+  }
+
+  let iframe = document.getElementById(iframeId);
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(printContent);
+  iframe.contentWindow.document.close();
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, 250);
+}
+
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toast-message');
@@ -360,7 +403,7 @@ function getPeriodDisplayLabel() {
 function updatePeriodDisplay(period) {
   const label = getPeriodDisplayLabel();
   const el = document.getElementById('period-display-text');
-  if (el) el.textContent = 'Bulan ' + label + ' — FGV Palm Industries Sdn. Bhd.';
+  if (el) el.textContent = 'FGV Palm Industries Sdn. Bhd.';
   const printEl = document.getElementById('print-period-text');
   if (printEl) printEl.textContent = 'Reporting Month: ' + label + ' (As at ' + period + ')';
 }
@@ -868,7 +911,150 @@ function applyPaste() {
   triggerMonthEndAutoSave(500);
 }
 
-function triggerPrint() { window.print(); }
+function formatPeriodDDMMYYYY(period) {
+  const parts = String(period || '').split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : String(period || '');
+}
+
+function buildMonthEndPrintHtml() {
+  const formattedPeriod = formatPeriodDDMMYYYY(getSelectedPeriod());
+  const search = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+
+  const sorted = [...projectsData].sort((a, b) => (parseInt(a.ba, 10) || Infinity) - (parseInt(b.ba, 10) || Infinity));
+  const visibleData = search
+    ? sorted.filter(row =>
+        String(row.projek || '').toLowerCase().includes(search) ||
+        String(row.ba || '').toLowerCase().includes(search) ||
+        String(row.acc || '').toLowerCase().includes(search) ||
+        String(row.hse || '').toLowerCase().includes(search)
+      )
+    : sorted;
+
+  let totalBal = 0;
+  let totalRev = 0;
+  let totalFin = 0;
+
+  const rowsHtml = visibleData.map((row, idx) => {
+    const balance = Number(row.balance) || 0;
+    const reversal = calcReversal(balance);
+    const finalBal = balance - reversal;
+    totalBal += balance;
+    totalRev += reversal;
+    totalFin += finalBal;
+
+    const isWarn = balance > 10000;
+    const endBalStyle = isWarn ? 'color: #dc2626; font-weight: 600;' : '';
+    const revStyle = isWarn ? 'color: #dc2626;' : 'color: #374151;';
+
+    return `
+      <tr${isWarn ? ' class="warn-row"' : ''}>
+        <td>${idx + 1}</td>
+        <td>${escapeHtml(row.projek)}</td>
+        <td>${escapeHtml(row.hse)}</td>
+        <td>${escapeHtml(row.acc)}</td>
+        <td>${escapeHtml(row.gl)}</td>
+        <td>${escapeHtml(row.ba)}</td>
+        <td class="right" style="${endBalStyle}">${fmt(balance)}</td>
+        <td class="right" style="${revStyle}">${fmt(reversal)}</td>
+        <td class="right" style="color: #047857; font-weight: 600;">${fmt(finalBal)}</td>
+      </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Project Month-End Balance Dashboard - ${escapeHtml(formattedPeriod)}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', 'Segoe UI', Arial, sans-serif;
+      color: #1f2937;
+      padding: 24px;
+      background: #ffffff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    header {
+      background-color: #1e3a5f;
+      color: #ffffff;
+      padding: 20px 24px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    header p { font-size: 13px; opacity: 0.9; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    thead { display: table-header-group; }
+    tfoot { display: table-row-group; }
+    th {
+      background-color: #1e3a5f;
+      color: #ffffff;
+      font-weight: 600;
+      padding: 10px 6px;
+      text-align: left;
+    }
+    th.right, td.right { text-align: right; }
+    td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+    tr:nth-child(even) { background-color: #f9fafb; }
+    tr.warn-row { background-color: #fef2f2 !important; }
+    .totals-row { background-color: #f3f4f6 !important; font-weight: 700; border-top: 2px solid #d1d5db; }
+    .signatures {
+      margin-top: 60px;
+      display: flex;
+      justify-content: space-between;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      font-size: 11px;
+    }
+    .sig-box { width: 220px; text-align: center; }
+    .sig-line { border-bottom: 1px solid #374151; height: 48px; margin-bottom: 8px; }
+    .sig-label { font-weight: 600; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Project Month-End Balance Dashboard</h1>
+    <p>FGV Palm Industries Sdn. Bhd. — Period: ${escapeHtml(formattedPeriod)}</p>
+  </header>
+  <table>
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>Project</th>
+        <th>House Bank</th>
+        <th>Account Bank</th>
+        <th>GL</th>
+        <th>BA</th>
+        <th class="right">End Balance</th>
+        <th class="right">Auto Reversal</th>
+        <th class="right">Final Balance</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot>
+      <tr class="totals-row">
+        <td colspan="6" class="right">TOTAL</td>
+        <td class="right">${fmt(totalBal)}</td>
+        <td class="right" style="color: #dc2626;">${fmt(totalRev)}</td>
+        <td class="right" style="color: #047857;">${fmt(totalFin)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="signatures">
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Prepared by,</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Verified by,</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">FGV Palm Industries Sdn Bhd</div></div>
+  </div>
+</body>
+</html>`;
+}
+
+function triggerPrint() {
+  openPrintDocument(buildMonthEndPrintHtml(), 'month-end-print-iframe');
+}
 
 // ================= MODULE 2: DAILY CASHFLOW LOGIC =================
 
@@ -1180,7 +1366,7 @@ function insertLessRow(prefix, label, isCustom) {
   const tr = document.createElement('tr');
   const nameCell = isCustom 
     ? '<td style="padding-left:24px"><input type="text" class="row-input" style="width:180px;" placeholder="Custom name"></td>'
-    : '<td style="padding-left:24px">' + label + '</td>';
+    : '<td style="padding-left:24px">' + escapeHtml(label) + '</td>';
   tr.innerHTML = `
     ${nameCell}
     <td class="text-right"><input type="number" class="row-input acc-${prefix}-less-input" value="0" step="0.01"></td>
@@ -1188,6 +1374,7 @@ function insertLessRow(prefix, label, isCustom) {
   `;
   totalRow.parentNode.insertBefore(tr, totalRow);
   recalcDaily();
+  return tr;
 }
 
 function addPlacementRow(prefix) {
@@ -1428,6 +1615,30 @@ function recalcAccountSection(prefix) {
   }
 }
 
+function find2859DeductionRow(label) {
+  const target = String(label || '').trim().toLowerCase();
+  if (!target) return null;
+  let found = null;
+  document.querySelectorAll('#cash-body-2859-s2 tr').forEach(tr => {
+    if (!found && tr.querySelector('.acc-2859-less-input') && getRowLabel(tr).toLowerCase() === target) {
+      found = tr;
+    }
+  });
+  return found;
+}
+
+function getReserved2859Labels() {
+  const reserved = new Set();
+  document.querySelectorAll('#cash-body-2859-s2 tr').forEach(tr => {
+    const inp = tr.querySelector('.acc-2859-less-input');
+    const lbl = getRowLabel(tr).toLowerCase();
+    if (inp && lbl && parseVal(inp.value) > 0) {
+      reserved.add(lbl);
+    }
+  });
+  return reserved;
+}
+
 function checkUpcomingPayments() {
   const banner = document.getElementById('reminder-banner');
   const list = document.getElementById('reminder-list');
@@ -1437,6 +1648,7 @@ function checkUpcomingPayments() {
   const curDate = parseDate(dateStr);
   if (!curDate) return;
 
+  const reservedLabels = getReserved2859Labels();
   const dueItems = [];
   document.querySelectorAll('#outgoing-body tr:not(.section-total)').forEach(tr => {
     const cells = tr.querySelectorAll('td');
@@ -1444,7 +1656,7 @@ function checkUpcomingPayments() {
       const label = getRowLabel(tr);
       const amt = parseVal(cells[1].querySelector('input')?.value || 0);
       const dueStr = cells[2].querySelector('input')?.value;
-      if (amt > 0 && dueStr) {
+      if (amt > 0 && dueStr && !reservedLabels.has(label.toLowerCase())) {
         const dueDate = parseDate(dueStr);
         if (dueDate) {
           const diffDays = Math.ceil((dueDate - curDate) / 864e5);
@@ -1457,6 +1669,7 @@ function checkUpcomingPayments() {
   });
 
   if (dueItems.length === 0) {
+    list.innerHTML = '';
     banner.style.display = 'none';
     return;
   }
@@ -1464,17 +1677,20 @@ function checkUpcomingPayments() {
   banner.style.display = 'block';
   list.innerHTML = dueItems.map(item => `
     <li>
-      <span><strong>${item.label}</strong>: RM ${fmt(item.amt)} (Due in ${item.diffDays} day${item.diffDays === 1 ? '' : 's'} on ${item.dueStr})</span>
-      <button class="add-btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="reserveOutgoing('${item.label}', ${item.amt})">Reserve in Deductions</button>
+      <span><strong>${escapeHtml(item.label)}</strong>: RM ${fmt(item.amt)} (Due in ${item.diffDays} day${item.diffDays === 1 ? '' : 's'} on ${escapeHtml(item.dueStr)})</span>
+      <button type="button" class="add-btn btn-primary" style="padding:2px 8px;font-size:11px;" data-label="${escapeHtml(item.label)}" data-amt="${item.amt}" onclick="reserveOutgoing(this.dataset.label, parseFloat(this.dataset.amt) || 0)">Reserve in Deductions</button>
     </li>
   `).join('');
 }
 
 function reserveOutgoing(label, amt) {
-  insertLessRow('2859', label, false);
-  const lessInputs = document.querySelectorAll('.acc-2859-less-input');
-  if (lessInputs.length > 0) {
-    lessInputs[lessInputs.length - 1].value = amt;
+  let targetRow = find2859DeductionRow(label);
+  if (!targetRow) {
+    targetRow = insertLessRow('2859', label, false);
+  }
+  const input = targetRow ? targetRow.querySelector('.acc-2859-less-input') : null;
+  if (input) {
+    input.value = amt;
   }
   recalcDaily();
   showToast(`Reserved ${label} (RM ${fmt(amt)}) in MBB 2859 deductions.`);
@@ -1958,37 +2174,7 @@ function exportDailyPDF() {
     printContent += '</tbody></table></body></html>';
   }
 
-  // Open popup print window or fallback to hidden iframe
-  const printWindow = window.open('', '_blank', 'width=950,height=750');
-  if (printWindow) {
-    printWindow.document.open();
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-    }, 250);
-  } else {
-    let iframe = document.getElementById('daily-print-iframe');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'daily-print-iframe';
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      document.body.appendChild(iframe);
-    }
-    iframe.contentWindow.document.open();
-    iframe.contentWindow.document.write(printContent);
-    iframe.contentWindow.document.close();
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    }, 250);
-  }
+  openPrintDocument(printContent, 'daily-print-iframe');
 }
 
 // ================= LIVE AUTO-SYNC (SMART POLLING) =================
