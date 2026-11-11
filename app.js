@@ -1600,7 +1600,7 @@ function recalcAccountSection(prefix) {
   if (heroAvail) heroAvail.textContent = 'RM ' + fmt(avail);
 
   const heroDeduct = document.getElementById('hero-deduct-' + prefix);
-  if (heroDeduct) heroDeduct.textContent = 'RM ' + fmt(deductTot);
+  if (heroDeduct) heroDeduct.textContent = 'RM ' + fmt(deductTot + placeTot);
 
   const heroNet = document.getElementById('hero-net-' + prefix);
   if (heroNet) {
