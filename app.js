@@ -1409,11 +1409,21 @@ function insertLessRow(prefix, label, isCustom) {
   tr.innerHTML = `
     ${nameCell}
     <td class="text-right"><input type="number" class="row-input acc-${prefix}-less-input" value="0" step="0.01"></td>
-    <td class="text-center"><button class="text-red-500 font-bold" onclick="this.closest('tr').remove();recalcDaily();">✕</button></td>
+    <td class="text-center"><button class="text-red-500 font-bold" onclick="removeLessRow(this, '${prefix}')">✕</button></td>
   `;
   totalRow.parentNode.insertBefore(tr, totalRow);
   recalcDaily();
   return tr;
+}
+
+function removeLessRow(btn, prefix) {
+  const tr = btn.closest('tr');
+  const lbl = tr ? getRowLabel(tr).toLowerCase().trim() : '';
+  if (tr) tr.remove();
+  if (prefix === '2859' && lbl) {
+    globalReserved2859Labels.delete(lbl);
+  }
+  recalcDaily();
 }
 
 function addPlacementRow(prefix) {
@@ -1652,20 +1662,6 @@ function recalcAccountSection(prefix) {
       heroNet.classList.add('text-rose');
     }
   }
-
-  if (prefix === '2859') {
-    const curDateStr = document.getElementById('daily-report-date')?.value || '';
-    if (!lastDailySyncDate || curDateStr >= lastDailySyncDate) {
-      globalReserved2859Labels = new Set();
-      document.querySelectorAll('#cash-body-2859-s2 tr').forEach(tr => {
-        const inp = tr.querySelector('.acc-2859-less-input');
-        const lbl = getRowLabel(tr).toLowerCase().trim();
-        if (inp && lbl && parseVal(inp.value) > 0) {
-          globalReserved2859Labels.add(lbl);
-        }
-      });
-    }
-  }
 }
 
 function find2859DeductionRow(label) {
@@ -1743,7 +1739,6 @@ function checkUpcomingPayments() {
 }
 
 function reserveOutgoing(label, amt) {
-  if (label) globalReserved2859Labels.add(label.toLowerCase().trim());
   let targetRow = find2859DeductionRow(label);
   if (!targetRow) {
     targetRow = insertLessRow('2859', label, false);
@@ -1923,14 +1918,14 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
       {
         type: 'execute',
         stmt: {
-          sql: 'SELECT data_json FROM daily_cashflow WHERE report_date < ? ORDER BY report_date DESC LIMIT 1;',
+          sql: "SELECT data_json FROM daily_cashflow WHERE report_date < ? AND length(report_date) = 10 AND report_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' ORDER BY report_date DESC LIMIT 1;",
           args: [{ type: 'text', value: dateStr }]
         }
       },
       {
         type: 'execute',
         stmt: {
-          sql: 'SELECT data_json FROM daily_cashflow ORDER BY report_date DESC LIMIT 1;'
+          sql: "SELECT data_json FROM daily_cashflow WHERE length(report_date) = 10 AND report_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' ORDER BY report_date DESC LIMIT 5;"
         }
       }
     ]);
@@ -1952,17 +1947,21 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
         } catch (_) {}
       }
 
-      const latestVal = json.results?.[2]?.response?.result?.rows?.[0]?.[0]?.value;
-      if (latestVal) {
-        try {
-          const latestData = JSON.parse(latestVal);
-          globalReserved2859Labels = new Set();
-          (latestData.acc2859?.less || []).forEach(item => {
-            if (parseVal(item.val) > 0 && item.label) {
-              globalReserved2859Labels.add(item.label.toLowerCase().trim());
+      const recentRows = json.results?.[2]?.response?.result?.rows || [];
+      if (recentRows.length > 0) {
+        globalReserved2859Labels = new Set();
+        recentRows.forEach(r => {
+          try {
+            const recData = JSON.parse(r[0].value);
+            if (recData.report_date !== dateStr) {
+              (recData.acc2859?.less || []).forEach(item => {
+                if (parseVal(item.val) > 0 && item.label) {
+                  globalReserved2859Labels.add(item.label.toLowerCase().trim());
+                }
+              });
             }
-          });
-        } catch (_) {}
+          } catch (_) {}
+        });
       }
 
       if (val) {
