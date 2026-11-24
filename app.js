@@ -1652,6 +1652,20 @@ function recalcAccountSection(prefix) {
       heroNet.classList.add('text-rose');
     }
   }
+
+  if (prefix === '2859') {
+    const curDateStr = document.getElementById('daily-report-date')?.value || '';
+    if (!lastDailySyncDate || curDateStr >= lastDailySyncDate) {
+      globalReserved2859Labels = new Set();
+      document.querySelectorAll('#cash-body-2859-s2 tr').forEach(tr => {
+        const inp = tr.querySelector('.acc-2859-less-input');
+        const lbl = getRowLabel(tr).toLowerCase().trim();
+        if (inp && lbl && parseVal(inp.value) > 0) {
+          globalReserved2859Labels.add(lbl);
+        }
+      });
+    }
+  }
 }
 
 function find2859DeductionRow(label) {
@@ -1666,11 +1680,13 @@ function find2859DeductionRow(label) {
   return found;
 }
 
+let globalReserved2859Labels = new Set();
+
 function getReserved2859Labels() {
-  const reserved = new Set();
+  const reserved = new Set(globalReserved2859Labels);
   document.querySelectorAll('#cash-body-2859-s2 tr').forEach(tr => {
     const inp = tr.querySelector('.acc-2859-less-input');
-    const lbl = getRowLabel(tr).toLowerCase();
+    const lbl = getRowLabel(tr).toLowerCase().trim();
     if (inp && lbl && parseVal(inp.value) > 0) {
       reserved.add(lbl);
     }
@@ -1727,6 +1743,7 @@ function checkUpcomingPayments() {
 }
 
 function reserveOutgoing(label, amt) {
+  if (label) globalReserved2859Labels.add(label.toLowerCase().trim());
   let targetRow = find2859DeductionRow(label);
   if (!targetRow) {
     targetRow = insertLessRow('2859', label, false);
@@ -1909,6 +1926,12 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
           sql: 'SELECT data_json FROM daily_cashflow WHERE report_date < ? ORDER BY report_date DESC LIMIT 1;',
           args: [{ type: 'text', value: dateStr }]
         }
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT data_json FROM daily_cashflow ORDER BY report_date DESC LIMIT 1;'
+        }
       }
     ]);
 
@@ -1926,6 +1949,19 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
       if (priorVal) {
         try {
           priorOutgoing = JSON.parse(priorVal).outgoing || [];
+        } catch (_) {}
+      }
+
+      const latestVal = json.results?.[2]?.response?.result?.rows?.[0]?.[0]?.value;
+      if (latestVal) {
+        try {
+          const latestData = JSON.parse(latestVal);
+          globalReserved2859Labels = new Set();
+          (latestData.acc2859?.less || []).forEach(item => {
+            if (parseVal(item.val) > 0 && item.label) {
+              globalReserved2859Labels.add(item.label.toLowerCase().trim());
+            }
+          });
         } catch (_) {}
       }
 
