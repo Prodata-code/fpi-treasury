@@ -1642,11 +1642,10 @@ function getReserved2859Labels() {
 function checkUpcomingPayments() {
   const banner = document.getElementById('reminder-banner');
   const list = document.getElementById('reminder-list');
-  const dateStr = document.getElementById('daily-report-date')?.value;
-  if (!banner || !list || !dateStr) return;
+  if (!banner || !list) return;
 
-  const curDate = parseDate(dateStr);
-  if (!curDate) return;
+  const now = new Date();
+  const curDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const reservedLabels = getReserved2859Labels();
   const dueItems = [];
@@ -1675,12 +1674,17 @@ function checkUpcomingPayments() {
   }
 
   banner.style.display = 'block';
-  list.innerHTML = dueItems.map(item => `
+  list.innerHTML = dueItems.map(item => {
+    const dueText = item.diffDays === 0
+      ? `Due TODAY on ${escapeHtml(item.dueStr)}`
+      : `Due in ${item.diffDays} day${item.diffDays === 1 ? '' : 's'} on ${escapeHtml(item.dueStr)}`;
+    return `
     <li>
-      <span><strong>${escapeHtml(item.label)}</strong>: RM ${fmt(item.amt)} (Due in ${item.diffDays} day${item.diffDays === 1 ? '' : 's'} on ${escapeHtml(item.dueStr)})</span>
+      <span><strong>${escapeHtml(item.label)}</strong>: RM ${fmt(item.amt)} (${dueText})</span>
       <button type="button" class="add-btn btn-primary" style="padding:2px 8px;font-size:11px;" data-label="${escapeHtml(item.label)}" data-amt="${item.amt}" onclick="reserveOutgoing(this.dataset.label, parseFloat(this.dataset.amt) || 0)">Reserve in Deductions</button>
     </li>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function reserveOutgoing(label, amt) {
