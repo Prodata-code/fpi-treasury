@@ -1109,7 +1109,42 @@ function updateDailyBadge(status, dateStr) {
   }
 }
 
-function resetDailyScreenToCleanState() {
+function mergeOutgoingWithPrior(currentList, priorList) {
+  if (!priorList || priorList.length === 0) return currentList || [];
+
+  const map = new Map();
+  if (!currentList || currentList.length === 0) {
+    outgoingDefaultCategories.forEach(label => {
+      map.set(label.toLowerCase().trim(), { label, amt: 0, date: '' });
+    });
+  } else {
+    currentList.forEach(item => {
+      if (item && item.label) {
+        map.set(item.label.toLowerCase().trim(), { ...item });
+      }
+    });
+  }
+
+  priorList.forEach(priorItem => {
+    if (!priorItem || !priorItem.label) return;
+    const key = priorItem.label.toLowerCase().trim();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...priorItem });
+    } else {
+      const curAmt = parseVal(existing.amt);
+      const curDate = existing.date ? String(existing.date).trim() : '';
+      if (curAmt === 0 && !curDate && (parseVal(priorItem.amt) > 0 || priorItem.date)) {
+        existing.amt = priorItem.amt;
+        existing.date = priorItem.date || '';
+      }
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+function resetDailyScreenToCleanState(priorOutgoing = []) {
   isRestoringDaily = true;
   try {
     ['2859', '6476'].forEach(prefix => {
@@ -1143,16 +1178,20 @@ function resetDailyScreenToCleanState() {
       }
     });
 
-    // 5. Reset outgoing table back to defaults with 0 and empty dates
+    // 5. Reset outgoing table, carrying forward prior outgoing if available
     const outBody = document.getElementById('outgoing-body');
     if (outBody) {
       outBody.innerHTML = '';
-      outgoingDefaultCategories.forEach(label => {
+      const listToRender = (priorOutgoing && priorOutgoing.length > 0)
+        ? mergeOutgoingWithPrior([], priorOutgoing)
+        : outgoingDefaultCategories.map(label => ({ label, amt: 0, date: '' }));
+
+      listToRender.forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${label}</td>
-          <td class="text-right"><input type="number" class="row-input out-input" value="0" step="0.01"></td>
-          <td class="text-right"><input type="date" class="row-input" value=""></td>
+          <td>${escapeHtml(r.label)}</td>
+          <td class="text-right"><input type="number" class="row-input out-input" value="${r.amt || 0}" step="0.01"></td>
+          <td class="text-right"><input type="date" class="row-input" value="${r.date || ''}"></td>
         `;
         outBody.appendChild(tr);
       });
@@ -1856,13 +1895,22 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
 
   // DIRECT FETCH FROM TURSO DATABASE ONLY - NO LOCALSTORAGE
   try {
-    const json = await tursoPipeline([{
-      type: 'execute',
-      stmt: {
-        sql: 'SELECT data_json, updated_at FROM daily_cashflow WHERE report_date = ?;',
-        args: [{ type: 'text', value: dateStr }]
+    const json = await tursoPipeline([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT data_json, updated_at FROM daily_cashflow WHERE report_date = ?;',
+          args: [{ type: 'text', value: dateStr }]
+        }
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT data_json FROM daily_cashflow WHERE report_date < ? ORDER BY report_date DESC LIMIT 1;',
+          args: [{ type: 'text', value: dateStr }]
+        }
       }
-    }]);
+    ]);
 
     if (json) {
       const currentDateStr = document.getElementById('daily-report-date')?.value || new Date().toISOString().split('T')[0];
@@ -1872,8 +1920,21 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
       const row = json.results?.[0]?.response?.result?.rows?.[0];
       const val = row?.[0]?.value;
       const updatedAt = row?.[1]?.value ?? null;
+
+      const priorVal = json.results?.[1]?.response?.result?.rows?.[0]?.[0]?.value;
+      let priorOutgoing = [];
+      if (priorVal) {
+        try {
+          priorOutgoing = JSON.parse(priorVal).outgoing || [];
+        } catch (_) {}
+      }
+
       if (val) {
-        restoreDailyState(JSON.parse(val));
+        const state = JSON.parse(val);
+        if (priorOutgoing.length > 0) {
+          state.outgoing = mergeOutgoingWithPrior(state.outgoing || [], priorOutgoing);
+        }
+        restoreDailyState(state);
         lastDailySyncDate = dateStr;
         lastDailySyncAt = updatedAt;
         isDailyDirty = false;
@@ -1889,7 +1950,7 @@ async function fetchDailyCashflowFromTurso(isSilentSync = false) {
       lastDailySyncAt = null;
       isDailyDirty = false;
       if (!isSilentSync || hadRemoteRecord) {
-        resetDailyScreenToCleanState();
+        resetDailyScreenToCleanState(priorOutgoing);
         updateDailyBadge('clean', dateStr);
       }
       return;
