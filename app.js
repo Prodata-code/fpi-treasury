@@ -1709,8 +1709,10 @@ function checkUpcomingPayments() {
       if (amt > 0 && dueStr && !reservedLabels.has(label.toLowerCase())) {
         const dueDate = parseDate(dueStr);
         if (dueDate) {
-          const diffDays = Math.ceil((dueDate - curDate) / 864e5);
-          if (diffDays >= 0 && diffDays <= 3) {
+          const diffDays = Math.round((dueDate - curDate) / 864e5);
+          const isDueMonday = dueDate.getDay() === 1;
+          const isDueSoon = (diffDays === 0 || diffDays === 1) || (isDueMonday && (diffDays === 2 || diffDays === 3));
+          if (isDueSoon) {
             dueItems.push({ label, amt, dueStr, diffDays });
           }
         }
